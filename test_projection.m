@@ -26,12 +26,13 @@ proj_geom = astra_create_proj_geom('parallel', geom.spacing, geom.ndetectors, ge
 geom.proj  = proj_geom;
 geom.vol = vol_geom;
 stddev   = 1e-4;
+%
 
 
 
 %y = CTbeam(P,geom.proj,geom.vol);
 mask = circular_mask(nx,ny);
-phi = @(x) fwd_op(x,geom,mask) ;
+phi = @(x) CTbeam(x,proj_geom,vol_geom) ;
 %astra_fun = @(v,T) astra_wrap(v,T,vol_geom,proj_geom);
 phit = @(x) lsqr(@astra_fun,reshape(x',[numel(x) 1]),1e-4,500);
 
