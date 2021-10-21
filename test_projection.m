@@ -37,7 +37,7 @@ mask = circular_mask(nx,ny);
 phi = @(x) reshape(W*x(:),[W.proj_size]);
 %astra_fun = @(v,T) astra_wrap(v,T,vol_geom,proj_geom);
 %phit = @(x) lsqr(@astra_fun,reshape(x',[numel(x) 1]),1e-4,500);
-phit = @(v) reshape(W'*v(:),[nx ny]);
+phit = @(v) reshape(W'*v(:),[nx ny]);% can package this into an operator
 
 
 
