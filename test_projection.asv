@@ -27,13 +27,17 @@ geom.proj  = proj_geom;
 geom.vol = vol_geom;
 stddev   = 1e-4;
 
+W = opTomo('cuda',proj_geom,vol_geom);
+
 
 
 %y = CTbeam(P,geom.proj,geom.vol);
 mask = circular_mask(nx,ny);
-phi = @(x) fwd_op(x,geom,mask) ;
+%phi = @(x) CTbeam(x,geom,mask) ;
+phi = @(x) reshape(W*x(:),[W.proj_size]);
 %astra_fun = @(v,T) astra_wrap(v,T,vol_geom,proj_geom);
-phit = @(x) lsqr(@astra_fun,reshape(x',[numel(x) 1]),1e-4,500);
+%phit = @(x) lsqr(@astra_fun,reshape(x',[numel(x) 1]),1e-4,500);
+phit = @(v) lsqr();
 
 
 
@@ -61,12 +65,19 @@ Pxtmp = phi(xtmp) ;
 Ptytmp = phit(ytmp) ;
 fwd = real(Pxtmp(:)'*ytmp(:)) ;
 bwd = xtmp(:)'* Ptytmp(:) ;
+disp("size image")
+size(xtmp)
+disp("size mapped image")
+size(ytmp)
 disp('test adjoint operator')
 disp(['fwd = ', num2str(fwd)])
 disp(['bwd = ', num2str(bwd)])
 disp(['diff = ', num2str(norm(fwd-bwd)/norm(fwd))])
 
-normPhi = op_norm(param_data.Phi, param_data.Phit, [param_data.Ny, param_data.Nx], 1e-4, 200, 0);    
+normPhi = op_norm2(phi, phit, [ny, nx], 1e-4, 200, 0);    
+disp(['norm of phi = ', num2str(normPhi)])
+
+
 
 
 
@@ -93,4 +104,40 @@ function Y = astra_fun(X,T)
     Y = reshape(v',[numel(v) 1]);
   end
 end
+
+
+
+
+function val = op_norm2(A, At, im_size, tol, max_iter, verbose)
+%% computes the maximum eigen value of the compund operator At*A
+x = randn(im_size);
+x = x/norm(x(:));
+init_val = 1;
+
+for k = 1:max_iter
+    y_ = A(x);
+    x = At(y_);
+    %x = reshape(x,im_size);
+    val = norm(x(:));
+    rel_var = abs(val-init_val)/init_val;
+    if (verbose > 1)
+        fprintf('Iter = %i, norm = %e \n',k,val);
+    end
+    if (rel_var < tol)
+       break;
+    end
+    init_val = val;
+    x = x/val;
+    
 end
+
+if (verbose > 0)
+    fprintf('Norm = %e \n\n', val);
+end
+
+end
+
+end
+
+
+

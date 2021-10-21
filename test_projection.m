@@ -26,15 +26,18 @@ proj_geom = astra_create_proj_geom('parallel', geom.spacing, geom.ndetectors, ge
 geom.proj  = proj_geom;
 geom.vol = vol_geom;
 stddev   = 1e-4;
-%
+
+W = opTomo('cuda',proj_geom,vol_geom);
 
 
 
 %y = CTbeam(P,geom.proj,geom.vol);
 mask = circular_mask(nx,ny);
-phi = @(x) CTbeam(x,proj_geom,vol_geom) ;
+%phi = @(x) CTbeam(x,geom,mask) ;
+phi = @(x) reshape(W*x(:),[W.proj_size]);
 %astra_fun = @(v,T) astra_wrap(v,T,vol_geom,proj_geom);
-phit = @(x) lsqr(@astra_fun,reshape(x',[numel(x) 1]),1e-4,500);
+%phit = @(x) lsqr(@astra_fun,reshape(x',[numel(x) 1]),1e-4,500);
+phit = @(v) reshape(W'*v(:),[nx ny]);
 
 
 
@@ -82,6 +85,8 @@ disp(['norm of phi = ', num2str(normPhi)])
 
 
 
+
+
 function Y = astra_fun(X,T)
   if size(X,2)>1
       X = reshape(X',[numel(X) 1]);
@@ -112,7 +117,7 @@ init_val = 1;
 for k = 1:max_iter
     y_ = A(x);
     x = At(y_);
-    x = reshape(x,im_size);
+    %x = reshape(x,im_size);
     val = norm(x(:));
     rel_var = abs(val-init_val)/init_val;
     if (verbose > 1)
