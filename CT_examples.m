@@ -14,8 +14,12 @@ addpath(genpath('Tools'))
 
 
 %% 
-
-load('phantomMRI.mat')
+filename = "Data/ct_scans/ct1";
+load('Data/ct_scans/ct1/artcon_zslice_297.mat')
+im_true = single(CT);
+normA   = im_true-min(im_true(:));
+normA   = normA./max(normA(:));
+im_true = normA;
 seed = 0 ;
 SNR =@(x) 20 * log10(norm(im_true(:))/norm(im_true(:)-x(:)));
 
@@ -104,8 +108,8 @@ stop_norm = 1e-4 ;
 
 [xmap, fid, reg, norm_it, snr_it, time_it,time_total] = MAP_primal_dual(param_data, param_map, tau, sig1, sig2, max_it, stop_it, stop_norm, SNR) ;
 % 
-save('/home/adwaye/matlab_projects/test_CT/Figures/forward_problem_results.mat','xmap','fid','reg','norm_it','snr_it','time_it','time_total')
-load("Figures/forward_problem_results.mat")
+save('/home/adwaye/matlab_projects/test_CT/Figures/ct1/forward_problem_results.mat','xmap','fid','reg','norm_it','snr_it','time_it','time_total')
+load("Figures/ct1/forward_problem_results.mat")
 
 
 figure, 
@@ -153,8 +157,13 @@ param_hpd.lambda = param_map.lambda ;
 % clear mask_struct
 % 
 
+
 load("Data/structure3.mat")
+load("Figures/ct1/boundary_structure.mat")
+mask_struct(30:512,:)=0;
+mask_struct= single(mask_struct>0);
 tmp = xmap ; tmp(mask_struct>0) = 0 ;
+
 figure(99), 
 subplot 221, imagesc(mask_struct),colorbar(),title("mask"), axis image, colormap gray
 subplot 222, imagesc(tmp),colorbar(),title("reverse masked image"), axis image, colormap gray
@@ -336,7 +345,7 @@ smooth_max = result.smooth_max ;
 
 
 
-save('/home/adwaye/matlab_projects/test_CT/Figures/structure3/Buqo_problem_results.mat','xmap','hpd_constraint','theta','tau','epsilon','struct_mask','phi_imtrue','x_c','x_s','dist2','l2data','l1reg','l2smooth','smooth_max','rho')
+save('/home/adwaye/matlab_projects/test_CT/Figures/ct1/Buqo_problem_results.mat','xmap','hpd_constraint','theta','tau','epsilon','struct_mask','phi_imtrue','x_c','x_s','dist2','l2data','l1reg','l2smooth','smooth_max','rho')
 
 
 

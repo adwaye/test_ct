@@ -34,10 +34,11 @@ W = opTomo('cuda',proj_geom,vol_geom);
 %y = CTbeam(P,geom.proj,geom.vol);
 mask = circular_mask(nx,ny);
 %phi = @(x) CTbeam(x,geom,mask) ;
-phi = @(x) reshape(W*x(:),[W.proj_size]);
+%phi = @(x) reshape(W*x(:),[W.proj_size]);
+phi = @(x) fwd_op(x,W,mask);
 %astra_fun = @(v,T) astra_wrap(v,T,vol_geom,proj_geom);
 %phit = @(x) lsqr(@astra_fun,reshape(x',[numel(x) 1]),1e-4,500);
-phit = @(v) reshape(W'*v(:),[nx ny]);% can package this into an operator
+phit = @(v) bwd_op(v,W,mask); % can package this into an opera
 
 
 
