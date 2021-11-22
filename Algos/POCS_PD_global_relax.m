@@ -29,7 +29,7 @@ tau = 0.9 / (1 + sigma1 * param_data.normPhi ...
                + sigma3 * normMbar ...
                + sigma4 * normM) ;
 
-save('/home/adwaye/PycharmProjects/CT-UQ/data/stepSizes.mat','sigma1','sigma2','sigma3','sigma4','tau');           
+%save('/home/adwaye/PycharmProjects/CT-UQ/data/stepSizes.mat','sigma1','sigma2','sigma3','sigma4','tau');           
            
 if tau * (1 + sigma1*param_struct.normPsi+ sigma2*param_data.normPhi+ sigma3*normMbar+ sigma4*normM) >=1
     disp('Error convergence parameters for HPD constraint')
@@ -56,10 +56,10 @@ MxS = Mop(xS) ;
 
 %% critere
 dist2(1) = sum(abs(xS(:) - xC(:)).^2) ;
-l2data(1) = sqrt(sum(abs(Phix - param_data.y).^2)) ;
-l1reg(1) = sum(abs(Psix)) ;
+l2data(1) = sqrt(sum(abs(Phix - param_data.y).^2,'all')) ;
+l1reg(1) = sum(abs(Psix),'all') ;
 smooth_max(1) = max(abs(MbarxS(:))) ;
-l2smooth(1) = sqrt(sum(abs( MxS - param_struct.l2_mean ).^2)) ;
+l2smooth(1) = sqrt(sum(abs( MxS - param_struct.l2_mean ).^2,'all' ) ) ;
 time_tot(1) = 0 ;
 
 %% display
@@ -85,7 +85,7 @@ time_tot(1) = 0 ;
 
 for it = 1:param_algo.NbIt
     
-    tic
+    tic;
     v1old = v1 ;
     v2old = v2 ;
     v3old = v3 ;
@@ -117,10 +117,10 @@ for it = 1:param_algo.NbIt
     %% critere
     time_tot(it+1) = toc;
     dist2(it+1) = sum(abs(xS(:) - xC(:)).^2) ;
-    l2data(it+1) = sqrt(sum(abs(Phix - param_data.y).^2)) ;
-    l1reg(it+1) = sum(abs(Psix)) ;
+    l2data(it+1) = sqrt(sum(abs(Phix - param_data.y).^2,'all') ) ;
+    l1reg(it+1) = sum(abs(Psix),'all') ;
     smooth_max(it+1) = max(abs(MbarxS(:)));
-    l2smooth(it+1) = sqrt(sum(abs( MxS - param_struct.l2_mean ).^2)) ;
+    l2smooth(it+1) = sqrt(sum(abs( MxS - param_struct.l2_mean ).^2,'all')) ;
     
     %% display
     if mod(it, param_algo.display) == 0
@@ -142,12 +142,14 @@ for it = 1:param_algo.NbIt
         disp(['      vs. smooth tol.   = ',num2str(param_struct.tol_smooth)])
         disp('*********************************************')
         
-        figure(1)
+        h1 = figure(200);
+        h1.WindowState = 'minimized';
         subplot 121, imagesc((xC)), axis image; colorbar, colormap gray
         xlabel(['xC - it = ',num2str(it)])
         subplot 122, imagesc((xS)), axis image; colorbar, colormap gray
         xlabel(['xS - it = ',num2str(it)])
         pause(0.1)
+        set(0,'CurrentFigure',h1)
     end
     
     %% STOPPPPP

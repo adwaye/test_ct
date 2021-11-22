@@ -8,7 +8,10 @@ addpath Algos/
 addpath Data/
 addpath Tools/
 addpath(genpath('Tools'))
-P = phantom(256);
+% P = phantom(256);
+filename = "Data/ct_scans/ct1";
+load('Data/ct_scans/ct1/artcon_zslice_297.mat')
+im_true = single(CT);
 %load("/home/adwaye/PycharmProjects/CT-UQ/CTimages.mat");
 %P = gtruth*5;
 nx=size(P,1);

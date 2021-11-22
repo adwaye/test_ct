@@ -14,12 +14,21 @@ addpath(genpath('Tools'))
 
 
 %% 
-filename = "Data/ct_scans/ct1";
-load('Data/ct_scans/ct1/artcon_zslice_297.mat')
-im_true = single(CT);
+filename = "Data/ct_scans/ct1/pe_zslice_213.mat";
+target_folder = "/home/adwaye/matlab_projects/test_CT/Figures/ct1";
+matfile = load(filename);
+im_true = double(matfile.CT);
 normA   = im_true-min(im_true(:));
 normA   = normA./max(normA(:));
 im_true = normA;
+im_true = imresize(im_true,[256,256],'Method','bilinear');
+im_true = padarray(im_true,[128 128],0,'both');
+
+mask = matfile.labels;
+mask = imresize(mask,0.5,'bilinear');
+mask = double(mask>0);
+mask = padarray(mask,[128 128],0,'both');
+
 seed = 0 ;
 SNR =@(x) 20 * log10(norm(im_true(:))/norm(im_true(:)-x(:)));
 
@@ -32,7 +41,7 @@ param_data.Ny = size(im_true,2);
 
 vol_geom = astra_create_vol_geom(param_data.Nx,param_data.Ny);
 %create a parallel projection geometry with spacing =1 pixel, 384 
-geom.spacing    = 1.0;% 1/(nx*ny);
+geom.spacing    = 1.34;% 1/(nx*ny);
 geom.ndetectors = 384;
 geom.n_angles   = 200;
 geom.angles     = linspace2(0,pi,geom.n_angles);%use more angles
@@ -41,22 +50,37 @@ geom.proj       = proj_geom;
 geom.vol        = vol_geom;
 stddev          = 1e-4;
 W = opTomo('cuda',proj_geom,vol_geom);
+W_scaled = W/W.normest;
 
 num_angles = floor(1e-3*param_data.N) ;
 
 
 
 
-phi = @(x) reshape(W*x(:),W.proj_size);
+phi = @(x) reshape(W_scaled*x(:),W.proj_size);
 
-phit = @(v) reshape(W'*v(:),size(im_true)); 
+phit = @(v) reshape(W_scaled'*v(:),size(im_true)); 
 norm_phi = op_norm(phi, phit, [param_data.Ny, param_data.Nx], 1e-4, 200, 0);  
-Wscaled  = W/W.normest; 
-param_data.Phi  =@(x) fwd_op(x,W,param_data.Mask)/W.normest;
-param_data.Phit =@(y) bwd_op(y,W,param_data.Mask)/W.normest;
+Wscaled  = W/W.normest;
+param_data.Phi  =phi;
+param_data.Phit =phit;
 
 param_data.normPhi = Wscaled.normest;%op_norm(param_data.Phi, param_data.Phit, [param_data.Ny, param_data.Nx], 1e-4, 200, 0);    
 param_data.M       = size(param_data.Phi(im_true)) ;
+
+
+one_sinogram  = ones(size(phi(im_true)));
+geom_shape    = phit(one_sinogram);
+
+
+figure(1), 
+subplot 131, imagesc(im_true), axis image, colormap gray, colorbar, title("Ground Truth")
+subplot 132, imagesc(mask), axis image, colormap gray, colorbar, title("pe locations")
+subplot 133, imagesc(geom_shape), axis image, colormap gray, colorbar, title("Adjoint applied applied to one sinogram")
+
+
+
+imshow(geom_shape,[]);colorbar();title("");
 
 % -------------------------------------------------
 % test adjoint operator
@@ -85,7 +109,7 @@ param_data.data_eps = sqrt(2*prod(param_data.M) + 2* sqrt(4*prod(param_data.M)))
 im_fbp = param_data.Phit(param_data.y) ;
 figure, 
 subplot 131, imagesc(im_true), axis image, colormap gray, colorbar
-subplot 132, imagesc(param_data.Mask), axis image, colormap gray, colorbar
+%subplot 132, imagesc(param_data.Mask), axis image, colormap gray, colorbar
 subplot 133, imagesc(im_fbp), axis image, colormap gray, colorbar, xlabel(['FBP - SNR ', num2str(SNR(im_fbp))])
 
 %%
@@ -110,9 +134,7 @@ stop_norm = 1e-4 ;
 [filepath,name,ext] = fileparts(filename);
 
 results_name        = strjoin([name,"forward_problem_results.mat"],"_");
-results_path        = strjoin(["/home/adwaye/matlab_projects/test_CT/Figures/ct1" ,results_name],'/');
-
-
+results_path        = strjoin([target_folder ,results_name],'/');
 if isfile(results_path)
     load(results_path)
     
@@ -120,19 +142,22 @@ else
     [xmap, fid, reg, norm_it, snr_it, time_it,time_total] = MAP_primal_dual(param_data, param_map, tau, sig1, sig2, max_it, stop_it, stop_norm, SNR) ;    
     save(results_path,'xmap','fid','reg','norm_it','snr_it','time_it','time_total')
 end
-
-[xmap, fid, reg, norm_it, snr_it, time_it,time_total] = MAP_primal_dual(param_data, param_map, tau, sig1, sig2, max_it, stop_it, stop_norm, SNR) ;
+xmap = double(xmap);
 % 
-save('/home/adwaye/matlab_projects/test_CT/Figures/ct1/forward_problem_results.mat','xmap','fid','reg','norm_it','snr_it','time_it','time_total')
-load("Figures/ct1/forward_problem_results.mat")
 
 
-figure, 
+
+
+
+
+fig = figure, 
 subplot 221, imagesc(im_true), axis image, colormap gray, colorbar, xlabel('true')
-subplot 222, imagesc(param_data.Mask), axis image, colormap gray, colorbar, xlabel('mask')
+subplot 222, imagesc(mask), axis image, colormap gray, colorbar, xlabel('mask')
 subplot 223, imagesc(im_fbp), axis image, colormap gray, colorbar, xlabel(['FBP - SNR ', num2str(SNR(im_fbp))])
 subplot 224, imagesc(xmap), axis image, colormap gray, colorbar, xlabel(['xmap - SNR ', num2str(snr_it(end))])
-
+fig_ext = strjoin([name,"fwd_res",prod(size(norm_it)),"it",geom.ndetectors,"ndtct",geom.n_angles,"agls",geom.spacing,"grdsz.fig"],"_")
+fig_path = strjoin([target_folder,fig_ext],"/")
+saveas(fig,fig_path)
 
 
 
@@ -153,34 +178,12 @@ param_hpd.Psi = param_map.Psi ;
 param_hpd.normPsi = param_map.normPsi ;
 param_hpd.lambda = param_map.lambda ;
 
-%%
-% cropx =  161:167 ;
-% cropy = 188:193;
-% mincrop = 0.25 ;
-% maxcrop = 0.32 ;
-% 
-% mask_struct = zeros(size(xmap)) ;
-% mask_struct(cropy,cropx) = 1 ;
-% % save("Data/structure1.mat","mask_struct")
-% % mask_struct = mask_struct.*(xmap>mincrop) ;
-% % mask_struct = mask_struct.*(xmap<maxcrop) ;
-% mask_struct(135, 70:75) = 0 ;
-% mask_struct(74:75, 130:132) = 0 ;
-% mask_struct(137:139, 163:165) = 0 ;
-% mask_struct = imdilate(mask_struct,strel('disk',1));
-% save("Data/structure3.mat","mask_struct")
-% clear mask_struct
-% 
 
-
-load("Data/structure3.mat")
-%load("Figures/ct1/boundary_structure.mat")
-mask_struct(30:512,:)=0;
-mask_struct= single(mask_struct>0);
+mask_struct= single(mask>0);
 tmp = xmap ; tmp(mask_struct>0) = 0 ;
 
 figure(99), 
-subplot 221, imagesc(mask_struct),colorbar(),title("mask"), axis image, colormap gray
+subplot 221, imagesc(mask),colorbar(),title("mask"), axis image, colormap gray
 subplot 222, imagesc(tmp),colorbar(),title("reverse masked image"), axis image, colormap gray
 subplot 223, imagesc(im_true),colorbar(),title("ground truth"), axis image, colormap gray
 subplot 224, imagesc(xmap),colorbar(),title("map estimate"), axis image, colormap gray
@@ -303,11 +306,14 @@ disp('*****************************************')
 disp(['       rho = ',num2str(rho)])
 disp('*****************************************')
 
-figure, 
+fig =figure, 
 subplot 221, imagesc(xmap), axis image; colormap gray; colorbar, xlabel('xmap')
 subplot 222, imagesc(xmap_S), axis image; colormap gray; colorbar, xlabel('xmap - no struct')
 subplot 223, imagesc(result.xC), axis image; colormap gray; colorbar, xlabel('xC')
 subplot 224, imagesc(result.xS), axis image; colormap gray; colorbar, xlabel('xS')
+fig_ext = strjoin([name,"BUQO_res",prod(size(result.time)),"it",geom.ndetectors,"ndtct",geom.n_angles,"agls",geom.spacing,"grdsz.fig"],"_")
+fig_path = strjoin([target_folder,fig_ext],"/")
+saveas(fig,fig_path)
 
 
 L = param_struct.L;
@@ -315,15 +321,15 @@ Mask = param_struct.Mask;
 
 %Mask = load("/home/adwaye/PycharmProjects/CT-UQ/adwaye_results/adwaye_mask.mat");
 %Mask = Mask.mask;
-[L, xinp_tot,xinp_multscale]  = create_inpainting_operator_test(Mask, param_struct.Size_Gauss_kern, xmap);
-bar =@(x) x(Mask>0) - L*x(Mask==0) ;
-Msel = sparse(1:sum(Mask(:)), find(Mask(:)), ones(sum(Mask(:)),1), sum(Mask(:)), numel(Mask));
-Mcsel = sparse(1:sum(1-Mask(:)), find(1-Mask(:)), ones(sum(1-Mask(:)),1), sum(1-Mask(:)), numel(Mask));
-Lbar_ =@(x) (Msel - L * Mcsel) * x(:) ;
-Lbaradj_ =@(y) (Msel' - Mcsel' * L') * y ;
+% [L, xinp_tot,xinp_multscale]  = create_inpainting_operator_test(Mask, param_struct.Size_Gauss_kern, xmap);
+% bar =@(x) x(Mask>0) - L*x(Mask==0) ;
+% Msel = sparse(1:sum(Mask(:)), find(Mask(:)), ones(sum(Mask(:)),1), sum(Mask(:)), numel(Mask));
+% Mcsel = sparse(1:sum(1-Mask(:)), find(1-Mask(:)), ones(sum(1-Mask(:)),1), sum(1-Mask(:)), numel(Mask));
+% Lbar_ =@(x) (Msel - L * Mcsel) * x(:) ;
+% Lbaradj_ =@(y) (Msel' - Mcsel' * L') * y ;
 
 
-normLbar = op_norm(Lbar_, Lbaradj_, size(xmap), 1e-3, 400, 0);
+% normLbar = op_norm(Lbar_, Lbaradj_, size(xmap), 1e-3, 400, 0);
 
 
 lambda_t = param_hpd.lambda_t;
@@ -332,7 +338,7 @@ hpd_constraint = param_hpd.HPDconstraint;
 epsilon        = param_data.data_eps;
 theta          = param_struct.l2_bound;
 tau            = param_struct.tol_smooth;
-sampling_mask  = param_data.Mask;
+
 phi_imtrue     = param_data.Phi(im_true);
 phit_imtrue    = param_data.Phit(phi_imtrue);
 psi_imtrue     = param_map.Psit(im_true);
@@ -359,8 +365,11 @@ smooth_max = result.smooth_max ;
 
 
 
+[filepath,name,ext] = fileparts(filename);
 
-save('/home/adwaye/matlab_projects/test_CT/Figures/ct1/Buqo_problem_results.mat','xmap','hpd_constraint','theta','tau','epsilon','struct_mask','phi_imtrue','x_c','x_s','dist2','l2data','l1reg','l2smooth','smooth_max','rho')
+results_name        = strjoin([name,"Buqo_problem_results.mat"],"_");
+results_path        = strjoin(["/home/adwaye/matlab_projects/test_CT/Figures/ct1" ,results_name],'/');
+save(results_path,'xmap','hpd_constraint','theta','tau','epsilon','struct_mask','phi_imtrue','x_c','x_s','dist2','l2data','l1reg','l2smooth','smooth_max','rho')
 
 
 

@@ -1,4 +1,4 @@
-function [x, fid, reg, norm_it, snr_it] = MAP_primal_dual(param_data, param_map, tau, sig1, sig2, max_it, stop_it, stop_norm, SNR)
+function [x, fid, reg, norm_it, snr_it, time_it,time_total] = MAP_primal_dual(param_data, param_map, tau, sig1, sig2, max_it, stop_it, stop_norm, SNR)
 %% Primal-dual algorithm to minimise
 %  lambda * || Psit(x) ||_1 s.t.  || Phi(x)-y ||_2 <= data_eps and x>=0
 
@@ -14,10 +14,12 @@ Phix = param_data.Phi(x) ;
 
 reg(1) = param_map.lambda * sum(abs(Psitx(:))) ;
 fid(1) = sum(abs(Phix(:)-param_data.y(:)).^2) ;
+time_it(1) = 0 ;
 
 %% Iterations
-
+tic
 for it = 1:max_it
+    tic;
     xprev = x ;
     Psitx_ = Psitx ;
     Phix_ = Phix ;
@@ -38,8 +40,9 @@ for it = 1:max_it
     
     norm_it(it) = norm(x(:) - xprev(:))/norm(x(:)) ;
     snr_it(it) = SNR(x) ;
+    time_it(it+1) = toc;
     
-    if mod(it,500)==0
+    if mod(it,fix(max_it/50))==0
         disp('**************************************')
         disp(['it = ', num2str(it)])
         disp(['SNR = ', num2str(snr_it(it))])
@@ -48,11 +51,15 @@ for it = 1:max_it
         disp(['   vs eps = ', num2str(param_data.data_eps)])
         disp(' ')
         disp(['rel. norm it.: ', num2str(norm_it(it))])
-        figure(100)
+        h1 = figure(100);
+        %set(h1,'Visible','off')
+        h1.WindowState = 'minimized';
+        
         subplot 131, plot(reg), xlabel('it'), ylabel('l1 norm')
         subplot 132, hold off, plot(fid), hold on, plot(param_data.data_eps*ones(size(fid)),'r'), xlabel('it'), ylabel('l2 norm data')
         subplot 133, imagesc(x), axis image, colormap gray, colorbar, xlabel(['it=', num2str(it)])
         pause(0.1)
+        set(0,'CurrentFigure',h1)
     end
     
     
@@ -61,14 +68,16 @@ for it = 1:max_it
             && fid(it+1) <= param_data.data_eps * (1+stop_it) ...
             && abs(reg(it+1)-reg(it))/reg(it+1) < stop_it
         disp(['stop it = ', num2str(it)])
+        %set(h1,'Visible','off')
         break
     end
     
-    
+%    set(h1,'Visible','off')
     
 end
 
 
+time_total = toc;
 end
 
 
