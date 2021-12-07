@@ -16,6 +16,8 @@ addpath(genpath('Tools'))
 %% 
 
 load('phantomMRI.mat')
+target_folder = "/home/adwaye/matlab_projects/test_CT/Figures/structure3";
+
 seed = 0 ;
 SNR =@(x) 20 * log10(norm(im_true(:))/norm(im_true(:)-x(:)));
 
@@ -102,17 +104,31 @@ max_it = 20000 ;
 stop_it = 1e-4 ;
 stop_norm = 1e-4 ;
 
-[xmap, fid, reg, norm_it, snr_it, time_it,time_total] = MAP_primal_dual(param_data, param_map, tau, sig1, sig2, max_it, stop_it, stop_norm, SNR) ;
+
 % 
-save('/home/adwaye/matlab_projects/test_CT/Figures/forward_problem_results.mat','xmap','fid','reg','norm_it','snr_it','time_it','time_total')
-load("Figures/forward_problem_results.mat")
+
+results_param = strjoin([param_data.sig_noise,"noise",geom.ndetectors,"ndtct",geom.n_angles,"agls",geom.spacing,"grdsz"],"_")
+results_name  = strjoin(["forward_problem_results_res",results_param],"_")
+results_path        = strjoin([target_folder,results_name,"mat"],["/","."])
+if isfile(results_path)
+    load(results_path)
+else
+    [xmap, fid, reg, norm_it, snr_it, time_it,time_total] = MAP_primal_dual(param_data, param_map, tau, sig1, sig2, max_it, stop_it, stop_norm, SNR) ;
+    save(results_path,'xmap','fid','reg','norm_it','snr_it','time_it','time_total')
+end
 
 
-figure, 
+
+
+
+fig = figure;
 subplot 221, imagesc(im_true), axis image, colormap gray, colorbar, xlabel('true')
 subplot 222, imagesc(param_data.Mask), axis image, colormap gray, colorbar, xlabel('mask')
 subplot 223, imagesc(im_fbp), axis image, colormap gray, colorbar, xlabel(['FBP - SNR ', num2str(SNR(im_fbp))])
 subplot 224, imagesc(xmap), axis image, colormap gray, colorbar, xlabel(['xmap - SNR ', num2str(snr_it(end))])
+fig_name = strjoin(["fwd_res",results_param],"_");
+fig_path = strjoin([target_folder,fig_name,"fig"],["/","."]);
+saveas(fig,fig_path)
 
 
 
@@ -285,6 +301,9 @@ subplot 222, imagesc(xmap_S), axis image; colormap gray; colorbar, xlabel('xmap 
 subplot 223, imagesc(result.xC), axis image; colormap gray; colorbar, xlabel('xC')
 subplot 224, imagesc(result.xS), axis image; colormap gray; colorbar, xlabel('xS')
 
+fig_name = strjoin(["buqo_res",results_param],"_")
+fig_path = strjoin([target_folder,fig_name,"fig"],["/","."])
+saveas(fig,fig_path)
 
 L = param_struct.L;
 Mask = param_struct.Mask;
@@ -335,7 +354,9 @@ smooth_max = result.smooth_max ;
 
 
 
-
+results_param = strjoin([param_data.sig_noise,"noise",geom.ndetectors,"ndtct",geom.n_angles,"agls",geom.spacing,"grdsz"],"_")
+results_name  = strjoin(["forward_problem_results_res",results_param],"_")
+results_path        = strjoin([target_folder,results_name,"mat"],["/","."])
 save('/home/adwaye/matlab_projects/test_CT/Figures/structure3/Buqo_problem_results.mat','xmap','hpd_constraint','theta','tau','epsilon','struct_mask','phi_imtrue','x_c','x_s','dist2','l2data','l1reg','l2smooth','smooth_max','rho')
 
 
