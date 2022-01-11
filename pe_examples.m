@@ -16,16 +16,16 @@ addpath(genpath('Tools'))
 %% 
 source_folder = "Data/ct_scans/ct1"
 target_folder = "/home/adwaye/matlab_projects/test_CT/Figures/ct1";
-filename  = "Data/ct_scans/ct1/pe_zslice_213.mat";
+filename  = "Data/ct_scans/ct1/pe_zslice_189.mat";
 query     = strjoin([source_folder,"*slice_*"],'/');
 filenames = dir(query);
 nfiles    = size(filenames,1);
 for k = 1:nfiles
     tempname = filenames(k).name;
     [filepath,fname,ext] = fileparts(tempname);
-    if strcmp(ext,".mat") & contains(fname,"curated")
-        disp("kok")
-
+    if strcmp(ext,".mat") && contains(tempname,"curated2_pe_zslice_189")
+        disp("kok");
+        disp(tempname);
         filename = strjoin([source_folder,tempname],"/");
         name     = fname;
    
@@ -150,7 +150,7 @@ for k = 1:nfiles
 
 
         
-        results_param       = strjoin([param_data.sig_noise,"noise",geom.ndetectors,"ndtct",geom.n_angles,"agls",geom.spacing,"grdsz"],"_")
+        results_param       = strjoin([param_data.sig_noise,"noise",geom.ndetectors,"ndtct",geom.n_angles,"agls",geom.spacing,"grdsz"],"_");
         results_name        = strjoin([name,"forward_problem_results",results_param,"mat"],["_","_","."]);
         results_path        = strjoin([target_folder ,results_name],'/');
         if isfile(results_path)
@@ -248,7 +248,8 @@ for k = 1:nfiles
         subplot 223, imagesc(im_true), axis image; colorbar, colormap gray, xlabel('true')
         subplot 224, imagesc(xmap), axis image; colorbar, colormap gray, xlabel('map')
 
-        param_struct.l2_mean = 0 ;
+        %param_struct.l2_mean = 0 ;
+        param_struct.l2_mean = mean(xmap_S(param_struct.Mask>0)) ;
         param_struct.l2_bound = sqrt(sum(abs(xmap_S(param_struct.Mask>0)).^2)) ; %AR note: this is theta
 
         Mop = sparse(sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
@@ -378,7 +379,7 @@ for k = 1:nfiles
 
 
 
-        ;
+        
         kern_params         = strjoin([param_struct.Size_Gauss_kern,"kernel"],"_");
         results_name        = strjoin([name,"BUQO_problem_results",kern_params,results_param,"mat"],["_","_","_","."]);
         results_path        = strjoin([target_folder ,results_name],'/');
