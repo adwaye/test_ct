@@ -258,8 +258,9 @@ figure(132)
 imagesc((1-texture_mask).*xmap),axis image; colorbar, colormap gray, xlabel('sampled intensities for masked values')
 
 param_struct.l2_mean = sum(texture_mask.*xmap,'all')/sum(texture_mask(:));%mean(xmap_S(param_struct.Mask>0)) ;
-param_struct.l2_bound = sqrt(sum(abs(xmap_S(param_struct.Mask>0)).^2)); %AR note: this is theta
-
+% param_struct.l2_bound = sqrt(sum(abs(xmap_S(param_struct.Mask>0)).^2)); %AR note: this is theta, oroginal formulation
+%param_struct.l2_bound = 1.20*sqrt(sum(abs(xmap_S(texture_mask>0) - param_struct.l2_mean).^2)/sum(texture_mask(:))); %AR note: this is theta
+param_struct.l2_bound = 0.1;
 Mop = sparse(sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
 Mopcomp = sparse(numel(param_struct.Mask)-sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
 i = 1; ic = 1;

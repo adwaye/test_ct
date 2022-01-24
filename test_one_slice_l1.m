@@ -15,7 +15,7 @@ addpath(genpath('Tools'))
 
 %% 
 source_folder = "Data/ct_scans/ct1";
-target_folder = "/home/adwaye/matlab_projects/test_CT/Figures/ct1_experiment";
+target_folder = "/home/adwaye/matlab_projects/test_CT/Figures/ct1_experiment_l1_Mx";
 
 query     = strjoin([source_folder,"*slice_*"],'/');
 filenames = dir(query);
@@ -172,9 +172,7 @@ subplot 221, imagesc(im_true), axis image, colormap gray, colorbar, xlabel('true
 subplot 222, imagesc(mask), axis image, colormap gray, colorbar, xlabel('mask')
 subplot 223, imagesc(im_fbp), axis image, colormap gray, colorbar, xlabel(['FBP - SNR ', num2str(SNR(im_fbp))])
 subplot 224, imagesc(xmap), axis image, colormap gray, colorbar, xlabel(['xmap - SNR ', num2str(snr_it(end))])
-fig_name = strjoin([name,"fwd_res",forward_param_names,"fig"],["_","_","."]);
-fig_path = strjoin([target_folder,fig_name],"/");
-saveas(fig,fig_path)
+
 
 
 
@@ -206,11 +204,14 @@ mask = padarray(mask,[pad_up pad_side],0,'both');
 mask_struct = mask;
 tmp = xmap ; tmp(mask_struct>0) = 0 ;
 
-figure(99), 
+fig = figure(99), 
 subplot 221, imagesc(mask),colorbar(),title("mask"), axis image, colormap gray
 subplot 222, imagesc(tmp),colorbar(),title("reverse masked image"), axis image, colormap gray
 subplot 223, imagesc(im_true),colorbar(),title("ground truth"), axis image, colormap gray
 subplot 224, imagesc(xmap),colorbar(),title("map estimate"), axis image, colormap gray
+fig_name = strjoin([name,"fwd_res",forward_param_names,"fig"],["_","_","."]);
+fig_path = strjoin([target_folder,fig_name],"/");
+saveas(fig,fig_path)
 
 
 %imwrite(im_true,'figures/g_truth')
@@ -242,7 +243,7 @@ param_struct.normLi = op_norm(param_struct.Lit, param_struct.Li, [numel(param_st
 
 xmap_S = xmap ;
 xmap_S(param_struct.Mask>0) = param_struct.L*xmap(param_struct.Mask==0) ;
-figure, 
+fig=figure, 
 subplot 221, imagesc(tmp), axis image; colorbar, colormap gray, xlabel('map without struct')
 subplot 222, imagesc(xmap_S), axis image ; colorbar, colormap gray, xlabel('smoothed struct')
 subplot 223, imagesc(im_true), axis image; colorbar, colormap gray, xlabel('true')
@@ -257,9 +258,9 @@ figure(132)
 imagesc((1-texture_mask).*xmap),axis image; colorbar, colormap gray, xlabel('sampled intensities for masked values')
 
 param_struct.l2_mean = sum(texture_mask.*xmap,'all')/sum(texture_mask(:));%mean(xmap_S(param_struct.Mask>0)) ;
-% param_struct.l2_bound = sqrt(sum(abs(xmap_S(param_struct.Mask>0)).^2)); %AR note: this is theta, oroginal formulation
+%param_struct.l2_bound = sqrt(sum(abs(xmap_S(param_struct.Mask>0)).^2)); %AR note: this is theta, oroginal formulation
 param_struct.l2_bound = sqrt(sum(abs(xmap_S(texture_mask>0) - param_struct.l2_mean).^2)/sum(texture_mask(:))); %AR note: this is theta
-
+%param_struct.l2_bound = 0.1;
 Mop = sparse(sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
 Mopcomp = sparse(numel(param_struct.Mask)-sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
 i = 1; ic = 1;
@@ -328,7 +329,7 @@ else
     disp('xmap_S OUTSIDE Calpha -> run alternating projections')
     disp('*******************************************************')
     disp(' ')
-    result = POCS_PD_global_relax(xmap, xmap_S, param_algo, param_data, param_hpd, param_struct) ;
+    result = POCS_PD_global_relax_L1(xmap, xmap_S, param_algo, param_data, param_hpd, param_struct) ;
 end
 
 
@@ -344,9 +345,8 @@ subplot 221, imagesc(xmap), axis image; colormap gray; colorbar, xlabel('xmap')
 subplot 222, imagesc(xmap_S), axis image; colormap gray; colorbar, xlabel('xmap - no struct')
 subplot 223, imagesc(result.xC), axis image; colormap gray; colorbar, xlabel('xC')
 subplot 224, imagesc(result.xS), axis image; colormap gray; colorbar, xlabel('xS')
-kern_params         = strjoin([param_struct.Size_Gauss_kern,"kernel"],"_");
-l2_bound_params = strjoin([param_struct.l2_mean,"l2mean",param_struct.l2_bound,"l2bound",param_struct.tol_smooth,"tauLbar"],"_");
-fig_name        = strjoin([name,"BUQO_problem_results",kern_params,l2_bound_params,forward_param_names,"fig"],["_","_","_","_","."]);
+l2_bound_params = strjoin([param_struct.l2_mean,"l2mean",param_struct.l2_bound,"l2bound"],"_");
+fig_name        = strjoin([name,"BUQO_problem_results",l2_bound_params,forward_param_names,"fig"],["_","_","_","."]);
 fig_path = strjoin([target_folder,fig_name],"/");
 saveas(fig,fig_path)
 
@@ -389,11 +389,11 @@ smooth_max = result.smooth_max ;
 
 
 
-kern_params         = strjoin([param_struct.Size_Gauss_kern,"kernel"],"_");
-results_name        = strjoin([name,"BUQO_problem_results",kern_params,l2_bound_params,forward_param_names,"mat"],["_","_","_","_","."]);
-results_path        = strjoin([target_folder ,results_name],'/');
-save(results_path,'xmap','hpd_constraint','theta','tau','epsilon','struct_mask','phi_imtrue','x_c','x_s','dist2','l2data','l1reg','l2smooth','smooth_max','rho')
 
+
+results_name        = strjoin([name,"BUQO_problem_results",l2_bound_params,forward_param_names,"mat"],["_","_","_","."]);
+results_path        = strjoin([target_folder ,results_name],'/');
+save(results_path,'xmap','hpd_constraint','theta','tau','epsilon','struct_mask','phi_imtrue','x_c','x_s','dist2','l2data','l1reg','l2smooth','rho')
 
 
 
@@ -403,9 +403,9 @@ subplot(322);plot(l2data), hold on, plot(epsilon*ones(size(l2data)),'r'), xlabel
 subplot(323);plot(l2smooth), hold on, plot(theta*ones(size(l2smooth)),'r'),  xlabel('it'), ylabel('Mask energy-Mxs')
 subplot(324);plot(smooth_max), hold on, plot(tau*ones(size(smooth_max)),'r'),  xlabel('it'), ylabel('inpainting energy-Lbar xs')
 subplot(325);plot(dist2),   xlabel('it'), ylabel('Distance between xc and xs')
-kern_params         = strjoin([param_struct.Size_Gauss_kern,"kernel"],"_");
-l2_bound_params = strjoin([param_struct.l2_mean,"l2mean",param_struct.l2_bound,"l2bound",param_struct.tol_smooth,"tauLbar"],"_");
-fig_name        = strjoin([name,"BUQO_problem_convergence",kern_params,l2_bound_params,forward_param_names,"fig"],["_","_","_","_","."]);
+
+
+fig_name        = strjoin([name,"BUQO_problem_convergence",l2_bound_params,forward_param_names,"fig"],["_","_","_","."]);
 fig_path = strjoin([target_folder,fig_name],"/");
 saveas(fig,fig_path)
 
