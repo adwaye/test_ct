@@ -67,7 +67,7 @@ dist2(1) = sum(abs(xS(:) - xC(:)).^2) ;
 l2data(1) = sqrt(sum(abs(Phix - param_data.y).^2,'all')) ;
 l1reg(1) = sum(abs(Psix),'all') ;
 % smooth_max(1) = max(abs(MbarxS(:))) ;
-l2smooth(1) = sqrt(sum(abs( MxS - param_struct.l2_mean ).^2,'all' ) ) ;
+l2smooth(1) = sum(abs( MxS - param_struct.l2_mean ),'all' )  ;
 time_tot(1) = 0 ;
 
 %% display
@@ -133,7 +133,7 @@ for it = 1:param_algo.NbIt
     l2data(it+1) = sqrt(sum(abs(Phix - param_data.y).^2,'all') ) ;
     l1reg(it+1) = sum(abs(Psix),'all') ;
 %     smooth_max(it+1) = max(abs(MbarxS(:)));
-    l2smooth(it+1) = sqrt(sum(abs( MxS - param_struct.l2_mean ).^2,'all')) ;
+    l2smooth(it+1) = sum(abs( MxS - param_struct.l2_mean ),'all') ;
     
     %% display
     if mod(it, param_algo.display) == 0

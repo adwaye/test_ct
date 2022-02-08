@@ -1,4 +1,4 @@
-function results = POCS_PD_global_relax_L1(xmap, xmap_inp, param_algo, param_data, param_hpd, param_struct)
+function results = POCS_PD_global_relax_L_infinity(xmap, xmap_inp, param_algo, param_data, param_hpd, param_struct)
 
 
 %% Operateurs
@@ -59,7 +59,9 @@ dist2(1) = sum(abs(xS(:) - xC(:)).^2) ;
 l2data(1) = sqrt(sum(abs(Phix - param_data.y).^2,'all')) ;
 l1reg(1) = sum(abs(Psix),'all') ;
 smooth_max(1) = max(abs(MbarxS(:))) ;
-l2smooth(1) = sum(abs( MxS - param_struct.l2_mean ),'all' )  ;
+% l2smooth(1) = max(abs( MxS - param_struct.l2_mean ) )  ;
+linfsmooth_max(1) = max(MxS,[],'all');
+linfsmooth_min(1) = min(MxS,[],'all');
 time_tot(1) = 0 ;
 
 %% display
@@ -74,8 +76,11 @@ time_tot(1) = 0 ;
     disp(['|| Psi(xC) ||_1           = ',num2str(l1reg(1))])
     disp(['      vs. l1 bound        = ',num2str(param_hpd.HPDconstraint)])
     disp('---------------------------------------------')
-    disp(['|| MxS - mean ||_2        = ',num2str(l2smooth(1))])
-    disp(['      vs. energy bound    = ',num2str(param_struct.l2_bound)])
+    disp(['max( MxS )                = ',num2str(linfsmooth_max(1))])
+    disp(['      vs. upper bound    = ',num2str(param_struct.linf_bound_max)])
+    disp(['min( MxS )                = ',num2str(linfsmooth_min(1))])
+    disp(['      vs. lower bound    = ',num2str(param_struct.linf_bound_min)])
+    disp('---------------------------------------------')
     disp(['max( MxS - LMxS )       = ',num2str(smooth_max(1))])
     disp(['      vs. smooth tol.   = ',num2str(param_struct.tol_smooth)])
     disp('*********************************************')
@@ -103,8 +108,9 @@ for it = 1:param_algo.NbIt
     
     v4_ = v4 + sigma4 * MxS ;
 %     v4 = v4_ - sigma4 * proj_l2ball( sigma4^(-1) * v4_, param_struct.l2_bound, param_struct.l2_mean ) ;
-    % changed this to project on the l1-ball
-    v4 = v4_ - sigma4 * oneProjector( sigma4^(-1) * (v4_-param_struct.l2_mean), param_struct.l2_bound ) ;
+    
+%     v4 = v4_ - sigma4 * min( param_struct.l2_bound+param_struct.l2_mean, max( sigma4^(-1) * (v4_), -param_struct.l2_bound+param_struct.l2_mean ) ) ;
+    v4 = v4_ - sigma4 * min( param_struct.linf_bound_max, max( sigma4^(-1) * (v4_), param_struct.linf_bound_min ) ) ;
     
     
     xC = xC - tau * ( (xC-xS) + real(param_data.Phit(2*v1-v1old)) + param_hpd.Psi(2*v2-v2old) ) ;
@@ -123,7 +129,9 @@ for it = 1:param_algo.NbIt
     l2data(it+1) = sqrt(sum(abs(Phix - param_data.y).^2,'all') ) ;
     l1reg(it+1) = sum(abs(Psix),'all') ;
     smooth_max(it+1) = max(abs(MbarxS(:)));
-    l2smooth(it+1) = sum(abs( MxS - param_struct.l2_mean ),'all') ;
+%     l2smooth(it+1) = max(abs( MxS - param_struct.l2_mean ));
+    linfsmooth_max(it+1) = max(MxS,[],'all');
+    linfsmooth_min(it+1) = min(MxS,[],'all');
     
     %% display
     if mod(it, param_algo.display) == 0
@@ -139,8 +147,10 @@ for it = 1:param_algo.NbIt
         disp(['|| Psi(xC) ||_1         = ',num2str(l1reg(it+1))])
         disp(['      vs. l1 bound      = ',num2str(param_hpd.HPDconstraint)])
         disp('---------------------------------------------')
-        disp(['|| MxS - mean ||_1      = ',num2str(l2smooth(it+1))])
-        disp(['      vs. energy bound  = ',num2str(param_struct.l2_bound)])
+        disp(['max( MxS )                = ',num2str(linfsmooth_max(it+1))])
+        disp(['      vs. upper bound    = ',num2str(param_struct.linf_bound_max)])
+        disp(['min( MxS )                = ',num2str(linfsmooth_min(it+1))])
+        disp(['      vs. lower bound    = ',num2str(param_struct.linf_bound_min)])
         disp(['max( MxS - LMxS )       = ',num2str(smooth_max(it+1))])
         disp(['      vs. smooth tol.   = ',num2str(param_struct.tol_smooth)])
         disp('*********************************************')
@@ -168,7 +178,8 @@ for it = 1:param_algo.NbIt
             && cond_l1reg_var < param_algo.stop_norm2 ...
             && cond_l2data < param_data.data_eps ...
             && cond_l1reg < param_hpd.HPDconstraint ...
-            && l2smooth(it+1) < param_struct.l2_bound ...
+            && linfsmooth_max(it+1) < param_struct.linf_bound_max ...
+            && linfsmooth_min(it+1) > param_struct.linf_bound_min ...
             && cond_smooth_norm < param_struct.tol_smooth
         disp(['STOP ITERATIONS - it = ',num2str(it)])
         break;
@@ -184,7 +195,9 @@ results.time = time_tot ;
 results.dist2 = dist2 ;
 results.l2data = l2data ;
 results.l1reg = l1reg ;
-results.l2smooth = l2smooth ;
+% results.l2smooth = l2smooth ;
+results.linfsmooth_min = linfsmooth_min;
+results.linfsmooth_max = linfsmooth_max;
 results.smooth_max = smooth_max ;
 
 end

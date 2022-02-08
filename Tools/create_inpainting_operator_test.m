@@ -182,7 +182,8 @@ for tt = 1:size(S_up,1)    % go through all the neighbors within the mask alread
     WG = WG + wt * WGt ;
 end
 
-
+size_wg=size(WG);
+size_wg=size(xtmp);
 values = WG.*xtmp ;
 xinp(j,i) = sum( values(:) ) ;
 

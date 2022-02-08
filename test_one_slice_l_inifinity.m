@@ -15,14 +15,14 @@ addpath(genpath('Tools'))
 
 %% 
 source_folder = "Data/ct_scans/ct1";
-target_folder = "/home/adwaye/matlab_projects/test_CT/Figures/ct1_experiment_no_inpainting_linfty_Mx";
+target_folder = "/home/adwaye/matlab_projects/test_CT/Figures/ct1_experiment_l_infinity_Mx";
 
 query     = strjoin([source_folder,"*slice_*"],'/');
 filenames = dir(query);
 nfiles    = size(filenames,1);
 
-% tempname = "curated2_pe_zslice_189.mat";%$change this to process a different slice
 tempname = "curated2_pe_xslice_225.mat";%$change this to process a different slice
+% tempname = "curated2_pe_zslice_189.mat";%$change this to process a different slice
 [filepath,fname,ext] = fileparts(tempname);
 
 
@@ -163,7 +163,7 @@ stop_norm = 1e-4 ;
 
 
 
-forward_param_names = strjoin([param_data.sig_noise,"noise",geom.ndetectors,"ndtct",geom.n_angles,"agls",geom.spacing,"grdsz"],"_");
+forward_param_names       = strjoin([param_data.sig_noise,"noise",geom.ndetectors,"ndtct",geom.n_angles,"agls",geom.spacing,"grdsz"],"_");
 results_name        = strjoin([name,"forward_problem_results",forward_param_names,"mat"],["_","_","."]);
 results_path        = strjoin([target_folder ,results_name],'/');
 if isfile(results_path)
@@ -208,7 +208,6 @@ param_hpd.lambda = param_map.lambda ;
 
 
 
-
 mask_struct = mask;
 [row_mask col_mask] = find(mask);
 max_y = max(col_mask,[],'all');
@@ -242,7 +241,7 @@ saveas(fig,fig_path)
 
 param_struct.Mask       = mask_struct; % Mask to select structure to test
 param_struct.choice_set = 'l2_const' ;
-param_struct.Size_Gauss_kern = [3,7,11] ;
+param_struct.Size_Gauss_kern = [3] ;
 disp('create inpainting operator...')
 disp('     -- recursive - can take few minutes... --')
 param_struct.L = create_inpainting_operator_test(param_struct.Mask, param_struct.Size_Gauss_kern, xmap) ;
@@ -286,192 +285,186 @@ end
 figure(132)
 imagesc((1-texture_mask).*xmap),axis image; colorbar, colormap gray, xlabel('sampled intensities for masked values')
 
+param_struct.l2_mean = 0.725;%sum(texture_mask.*xmap,'all')/sum(texture_mask(:));%mean(xmap_S(param_struct.Mask>0)) ;
+param_struct.linf_bound_max = quantile(xmap(texture_mask>0),1);%max(xmap(texture_mask>0),[],'all');
+param_struct.linf_bound_min = 0;%quantile(xmap(texture_mask>0),1-cum_prob);%min(xmap(texture_mask>0),[],'all');
+figure();
+histogram(xmap(texture_mask>0));
 
-cum_probs     = [0.7,0.8,0.9,0.95 ];
-for j=1:4
-    cum_prob = cum_probs(j)
-
-    param_struct.l2_mean = 0.725;%sum(texture_mask.*xmap,'all')/sum(texture_mask(:));%mean(xmap_S(param_struct.Mask>0)) ;
-    param_struct.linf_bound_max = quantile(xmap(texture_mask>0),1);%max(xmap(texture_mask>0),[],'all');
-    param_struct.linf_bound_min = 0;%quantile(xmap(texture_mask>0),1-cum_prob);%min(xmap(texture_mask>0),[],'all');
-    figure();
-    histogram(xmap(texture_mask>0));
-    %param_struct.l2_bound = sqrt(sum(abs(xmap_S(param_struct.Mask>0)).^2)); %AR note: this is theta, oroginal formulation
-    param_struct.l2_bound = 0.55;%sqrt(sum(abs(xmap_S(texture_mask>0) - param_struct.l2_mean).^2)/sum(texture_mask(:))); %AR note: this is theta
-    %param_struct.l2_bound = 0.1;
-    Mop = sparse(sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
-    Mopcomp = sparse(numel(param_struct.Mask)-sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
-    i = 1; ic = 1;
-    for n = 1:numel(param_struct.Mask)
-        if(param_struct.Mask(n))==0
-            Mopcomp(ic,n) = 1 ;
-            ic = ic+1 ;
-        else
-            Mop(i,n) = 1;
-            i = i+1 ;
-        end
-    end
-
-    param_struct.Mop = Mop ;
-    param_struct.Mbarop = Mop - param_struct.L*Mopcomp;
-
-    param_struct.l2b_Mask = sqrt(sum(param_struct.Mask(:)) + 2* sqrt(sum(param_struct.Mask(:)))) *  param_data.sig_noise ;
-    xM_ = param_struct.Mop * xmap(:) ;
-    param_struct.tol_smooth = std(xM_) ; %1e-5  ;AR note: this is [-tau,+tau]
-
-
-    param_struct.Psi = param_hpd.Psi ;
-    param_struct.Psit = param_hpd.Psit ;
-    param_struct.normPsi = param_hpd.normPsi ;
-    param_struct.l1bound = param_hpd.HPDconstraint ; 
-
-
-
-
-
-
-
-
-    %%
-
-    param_algo.NbIt = 10000 ;
-    param_algo.stop_dist = 1e-4 ;
-    param_algo.stop_norm2 = 1e-4 ;
-    param_algo.stop_norm1 = 1e-4 ;
-    param_algo.stop_err_smooth = 1e-4 ;
-
-
-
-    l1_mapS = sum(abs(param_map.Psit(xmap_S))) ;
-    l2_mapS = sqrt(sum( abs( param_data.Phi(xmap_S) - param_data.y ).^2 ,'all')) ;
-
-
-    disp(' ')
-    disp(' ')
-    disp(' ')
-    disp(' ')
-    disp(' ')
-    disp('*******************************************************')
-    disp('*******************************************************')
-    disp(['l1 inpaint = ',num2str(l1_mapS)])
-    disp(['HPD bound = ',num2str(param_hpd.HPDconstraint)])
-    disp(['l2 data inpaint = ',num2str(l2_mapS)])
-    disp(['data bound = ',num2str(param_data.data_eps)])
-
-
-
-    if l1_mapS <= param_hpd.HPDconstraint && l2_mapS <= param_data.data_eps
-        disp('Intersection between S and Calpha nonempty')
-        disp('*******************************************************')
-        result.xS = xmap_S ;
-        result.xC = xmap_S ;
+%param_struct.l2_bound = sqrt(sum(abs(xmap_S(param_struct.Mask>0)).^2)); %AR note: this is theta, oroginal formulation
+param_struct.l2_bound = 0.55;%sqrt(sum(abs(xmap_S(texture_mask>0) - param_struct.l2_mean).^2)/sum(texture_mask(:))); %AR note: this is theta
+%param_struct.l2_bound = 0.1;
+Mop = sparse(sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
+Mopcomp = sparse(numel(param_struct.Mask)-sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
+i = 1; ic = 1;
+for n = 1:numel(param_struct.Mask)
+    if(param_struct.Mask(n))==0
+        Mopcomp(ic,n) = 1 ;
+        ic = ic+1 ;
     else
-        disp('xmap_S OUTSIDE Calpha -> run alternating projections')
-        disp('*******************************************************')
-        disp(' ')
-        sigma4 = 1;
-        result = POCS_PD_global_relax_no_Lx_L_infinity(xmap, xmap_S, param_algo, param_data, param_hpd, param_struct,sigma4) ;
+        Mop(i,n) = 1;
+        i = i+1 ;
     end
-
-
-    rho  = norm( result.xC(:) - result.xS(:) ) / ...
-           norm( xmap(:) - xmap_S(:) ) ;
-    disp(' ')
-    disp('*****************************************')
-    disp(['       rho = ',num2str(rho)])
-    disp('*****************************************')
-
-    fig =figure, 
-    pause(0.00001);
-    frame_h = get(handle(gcf),'JavaFrame');
-    set(frame_h,'Maximized',1)
-    subplot 221, imagesc(xmap), axis image; colormap gray; colorbar, xlabel('xmap'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
-    subplot 222, imagesc(xmap_S), axis image; colormap gray; colorbar, xlabel('xmap - no struct'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
-    subplot 223, imagesc(result.xC), axis image; colormap gray; colorbar, xlabel('xC'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
-    subplot 224, imagesc(result.xS), axis image; colormap gray; colorbar, xlabel('xS'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
-    
-    linf_bound_params = strjoin([param_struct.linf_bound_max,"linfMax",param_struct.linf_bound_min,"linfMin",sigma4,"sigma4"],"_");
-    linf_bound_params_fig = strjoin([param_struct.linf_bound_max,"linfMax",param_struct.linf_bound_min,"linfMin",sigma4,"sigma4"],"-");
-    l2_bound_params = strjoin([param_struct.l2_mean,"l2mean",param_struct.l2_bound,"l2bound",sigma4,"sigma4"],"_");
-    l2_bound_params_fig = strjoin([param_struct.l2_mean,"l2mean",param_struct.l2_bound,"l2bound",sigma4,"sigma4"],"-");
-    sgtitle(strjoin(["no inpainting l-inifinity ",linf_bound_params_fig]))
-    disp(['saving everything as',strjoin([name,"BUQO_problem_results",linf_bound_params,forward_param_names],'_')]);
-    fig_name        = strjoin([name,"BUQO_problem_results",linf_bound_params,forward_param_names,"fig"],["_","_","_","."]);
-    fig_path = strjoin([target_folder,fig_name],"/");
-    
-    
-    png_fig_name = strjoin([name,"BUQO_problem_results",linf_bound_params,forward_param_names,"png"],["_","_","_","."]);
-    png_fig_path = strjoin([target_folder,'png',png_fig_name],"/");
-    saveas(fig,png_fig_path)
-
-
-    L = param_struct.L;
-    Mask = param_struct.Mask;
-
-
-    lambda_t = param_hpd.lambda_t;
-
-    hpd_constraint = param_hpd.HPDconstraint;
-    epsilon        = param_data.data_eps;
-    theta          = param_struct.l2_bound;
-    tau            = param_struct.tol_smooth;
-
-    phi_imtrue     = param_data.Phi(im_true);
-    phit_imtrue    = param_data.Phit(phi_imtrue);
-    psi_imtrue     = param_map.Psit(im_true);
-    psit_imtrue     = param_map.Psi(psi_imtrue);
-    x_c            = result.xC;
-    x_s            = result.xS;
-    Mop_imtrue     = param_struct.Mop*im_true(:);
-    Mopt =@(v) reshape(param_struct.Mop'*v, param_data.Ny, param_data.Nx);
-    Mopt_imtrue     = Mopt(Mop_imtrue(:));
-    Lbar_imtrue    = param_struct.Mbarop*im_true(:);
-    Mbaropt =@(v) reshape(param_struct.Mbarop'*v, param_data.Ny, param_data.Nx) ;
-    Lbart_imtrue = Mbaropt(Lbar_imtrue);
-    fft_imtrue   = TF(im_true,numel(im_true));
-    struct_mask   = param_struct.Mask;
-
-    time_tot = result.time;
-
-    dist2 = result.dist2  ;
-    l2data = result.l2data ;
-    l1reg = result.l1reg   ;
-    % l2smooth = result.l2smooth ;
-    linfsmooth_min = result.linfsmooth_min ;
-    linfsmooth_max = result.linfsmooth_max;
-
-
-
-
-
-
-
-    results_name        = strjoin([name,"BUQO_problem_results",linf_bound_params,forward_param_names,"mat"],["_","_","_","."]);
-    results_path        = strjoin([target_folder ,results_name],'/');
-    save(results_path,'xmap','hpd_constraint','theta','tau','epsilon','struct_mask','phi_imtrue','x_c','x_s','dist2','l2data','l1reg','linfsmooth_min','linfsmooth_max','rho')
-
-
-
-
-    fig =figure, 
-    subplot(221);plot(l1reg), hold on, plot(hpd_constraint*ones(size(l1reg)),'r'),xlabel('it'), ylabel('l1 norm regulariser hpd-psi xc'), 
-    subplot(222);plot(l2data), hold on, plot(epsilon*ones(size(l2data)),'r'), xlabel('it'), ylabel('l2 norm data fit-phi xc')
-    subplot(223);plot(linfsmooth_max,'--','Color',[0.5 0 0.8])
-    hold on
-    plot(linfsmooth_min,'--','Color',[0 0.9 0])
-    hold on
-    plot(param_struct.linf_bound_max*ones(size(linfsmooth_max)),'r')
-    hold on
-    plot(param_struct.linf_bound_min*ones(size(linfsmooth_min)),'b')
-    xlabel('it'), ylabel('Mask energy-Mxs'), legend('max(Mxs)','min(Mxs)','upper bound','lower bound')
-    subplot(224);plot(dist2),   xlabel('it'), ylabel('Distance between xc and xs')
-
-
-    fig_name        = strjoin([name,"BUQO_problem_convergence",linf_bound_params,forward_param_names,"fig"],["_","_","_","."]);
-    fig_path = strjoin([target_folder,fig_name],"/");
-    sgtitle(strjoin(["no inpainting l-inifinity ",linf_bound_params_fig]))
-    saveas(fig,fig_path)
-
-
-    pause(2)
 end
+
+param_struct.Mop = Mop ;
+param_struct.Mbarop = Mop - param_struct.L*Mopcomp;
+
+param_struct.l2b_Mask = sqrt(sum(param_struct.Mask(:)) + 2* sqrt(sum(param_struct.Mask(:)))) *  param_data.sig_noise ;
+xM_ = param_struct.Mop * xmap(:) ;
+param_struct.tol_smooth = quantile(xM_,0.95);%std(xM_) ; %1e-5  ;AR note: this is [-tau,+tau]
+
+
+param_struct.Psi = param_hpd.Psi ;
+param_struct.Psit = param_hpd.Psit ;
+param_struct.normPsi = param_hpd.normPsi ;
+param_struct.l1bound = param_hpd.HPDconstraint ; 
+
+
+
+
+
+
+
+
+%%
+
+param_algo.NbIt = 10000 ;
+param_algo.stop_dist = 1e-4 ;
+param_algo.stop_norm2 = 1e-4 ;
+param_algo.stop_norm1 = 1e-4 ;
+param_algo.stop_err_smooth = 1e-4 ;
+
+
+
+l1_mapS = sum(abs(param_map.Psit(xmap_S))) ;
+l2_mapS = sqrt(sum( abs( param_data.Phi(xmap_S) - param_data.y ).^2 ,'all')) ;
+
+
+disp(' ')
+disp(' ')
+disp(' ')
+disp(' ')
+disp(' ')
+disp('*******************************************************')
+disp('*******************************************************')
+disp(['l1 inpaint = ',num2str(l1_mapS)])
+disp(['HPD bound = ',num2str(param_hpd.HPDconstraint)])
+disp(['l2 data inpaint = ',num2str(l2_mapS)])
+disp(['data bound = ',num2str(param_data.data_eps)])
+
+if l1_mapS <= param_hpd.HPDconstraint && l2_mapS <= param_data.data_eps
+    disp('Intersection between S and Calpha nonempty')
+    disp('*******************************************************')
+    result.xS = xmap_S ;
+    result.xC = xmap_S ;
+else
+    disp('xmap_S OUTSIDE Calpha -> run alternating projections')
+    disp('*******************************************************')
+    disp(' ')
+    sigma4=   1;
+    result = POCS_PD_global_relax_L_infinity(xmap, xmap_S, param_algo, param_data, param_hpd, param_struct) ;
+end
+
+
+rho  = norm( result.xC(:) - result.xS(:) ) / ...
+       norm( xmap(:) - xmap_S(:) ) ;
+disp(' ')
+disp('*****************************************')
+disp(['       rho = ',num2str(rho)])
+disp('*****************************************')
+
+fig =figure, 
+pause(0.00001);
+frame_h = get(handle(gcf),'JavaFrame');
+set(frame_h,'Maximized',1)
+subplot 221, imagesc(xmap), axis image; colormap gray; colorbar, xlabel('xmap'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
+subplot 222, imagesc(xmap_S), axis image; colormap gray; colorbar, xlabel('xmap - no struct'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
+subplot 223, imagesc(result.xC), axis image; colormap gray; colorbar, xlabel('xC'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
+subplot 224, imagesc(result.xS), axis image; colormap gray; colorbar, xlabel('xS'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
+
+linf_bound_params = strjoin([param_struct.Size_Gauss_kern,"kernel",param_struct.tol_smooth,"tol_smooth",param_struct.linf_bound_max,"linfMax",param_struct.linf_bound_min,"linfMin",sigma4,"sigma4"],"_");
+linf_bound_params_fig = strjoin([param_struct.Size_Gauss_kern,"kernel",param_struct.tol_smooth,"tol_smooth",param_struct.linf_bound_max,"linfMax",param_struct.linf_bound_min,"linfMin",sigma4,"sigma4"],"-");
+l2_bound_params = strjoin([param_struct.Size_Gauss_kern,"kernel",param_struct.tol_smooth,"tol_smooth",param_struct.l2_mean,"l2mean",param_struct.l2_bound,"l2bound",sigma4,"sigma4"],"_");
+l2_bound_params_fig = strjoin([param_struct.Size_Gauss_kern,"kernel",param_struct.tol_smooth,"tol_smooth",param_struct.l2_mean,"l2mean",param_struct.l2_bound,"l2bound",sigma4,"sigma4"],"-");
+sgtitle(strjoin(["with inpainting l-inifinity ",linf_bound_params_fig]))
+disp(['saving everything as',strjoin([name,"BUQO_problem_results",linf_bound_params,forward_param_names],'_')]);
+fig_name        = strjoin([name,"BUQO_problem_results",linf_bound_params,forward_param_names,"fig"],["_","_","_","."]);
+fig_path = strjoin([target_folder,fig_name],"/");
+
+
+png_fig_name = strjoin([name,"BUQO_problem_results",linf_bound_params,forward_param_names,"png"],["_","_","_","."]);
+png_fig_path = strjoin([target_folder,'png',png_fig_name],"/");
+saveas(fig,png_fig_path)
+
+
+L = param_struct.L;
+Mask = param_struct.Mask;
+
+
+lambda_t = param_hpd.lambda_t;
+
+hpd_constraint = param_hpd.HPDconstraint;
+epsilon        = param_data.data_eps;
+theta          = param_struct.l2_bound;
+tau            = param_struct.tol_smooth;
+
+phi_imtrue     = param_data.Phi(im_true);
+phit_imtrue    = param_data.Phit(phi_imtrue);
+psi_imtrue     = param_map.Psit(im_true);
+psit_imtrue     = param_map.Psi(psi_imtrue);
+x_c            = result.xC;
+x_s            = result.xS;
+Mop_imtrue     = param_struct.Mop*im_true(:);
+Mopt =@(v) reshape(param_struct.Mop'*v, param_data.Ny, param_data.Nx);
+Mopt_imtrue     = Mopt(Mop_imtrue(:));
+Lbar_imtrue    = param_struct.Mbarop*im_true(:);
+Mbaropt =@(v) reshape(param_struct.Mbarop'*v, param_data.Ny, param_data.Nx) ;
+Lbart_imtrue = Mbaropt(Lbar_imtrue);
+fft_imtrue   = TF(im_true,numel(im_true));
+struct_mask   = param_struct.Mask;
+
+time_tot = result.time;
+
+dist2 = result.dist2  ;
+l2data = result.l2data ;
+l1reg = result.l1reg   ;
+% l2smooth = result.l2smooth ;
+smooth_max = result.smooth_max ;
+linfsmooth_min = result.linfsmooth_min ;
+linfsmooth_max = result.linfsmooth_max;
+
+
+
+
+
+
+
+results_name        = strjoin([name,"BUQO_problem_results",l2_bound_params,forward_param_names,"mat"],["_","_","_","."]);
+results_path        = strjoin([target_folder ,results_name],'/');
+save(results_path,'xmap','hpd_constraint','theta','tau','epsilon','struct_mask','phi_imtrue','x_c','x_s','dist2','l2data','l1reg','linfsmooth_min','linfsmooth_max','rho')
+
+
+
+fig =figure, 
+subplot(321);plot(l1reg), hold on, plot(hpd_constraint*ones(size(l1reg)),'r'),xlabel('it'), ylabel('l1 norm regulariser hpd-psi xc'), 
+subplot(322);plot(l2data), hold on, plot(epsilon*ones(size(l2data)),'r'), xlabel('it'), ylabel('l2 norm data fit-phi xc')
+subplot(323);plot(linfsmooth_max,'--','Color',[0.5 0 0.8])
+hold on
+plot(linfsmooth_min,'--','Color',[0 0.9 0])
+hold on
+plot(param_struct.linf_bound_max*ones(size(linfsmooth_max)),'r')
+hold on
+plot(param_struct.linf_bound_min*ones(size(linfsmooth_min)),'b')
+xlabel('it'), ylabel('Mask energy-Mxs'), legend('max(Mxs)','min(Mxs)','upper bound','lower bound')
+subplot(324);plot(smooth_max), hold on, plot(tau*ones(size(smooth_max)),'r'),  xlabel('it'), ylabel('inpainting energy-Lbar xs')
+subplot(325);plot(dist2),   xlabel('it'), ylabel('Distance between xc and xs')
+
+
+fig_name        = strjoin([name,"BUQO_problem_convergence",l2_bound_params,forward_param_names,"fig"],["_","_","_","."]);
+fig_path = strjoin([target_folder,fig_name],"/");
+sgtitle(strjoin(["with inpainting l-inifinity ",linf_bound_params_fig]))
+saveas(fig,fig_path)
+
+
+
