@@ -2,50 +2,10 @@ function [grad, gradt] = gradient_op(im)
 dim_x = size(im,1);
 dim_y = size(im,2);
 % [x y] = meshgrid(1:1:dim_x,1:1:dim_y);
-gradt = @(du) my_div_backward(du,dim_x,dim_y);
-grad  = @(u) my_grad_forward(u) ;
+gradt = @(du) my_div_central(du,dim_x,dim_y);
+grad  = @(u) my_grad_central(u) ;
 end
 
-
-
-
-function du = my_grad_forward(u)
-dim_x = size(u,1);
-dim_y = size(u,2);
-Fy = diff(u);
-Fy(dim_x,:) = 0-u(dim_x,:);
-size(Fy)
-Fx = diff(u');
-Fx = Fx';
-Fx(:,dim_y) = 0-u(:,dim_y);
-% dim_x = size(u,1);
-% dim_y = size(u,2);
-% [Fx, Fy]=gradient(u);
-% Fx(1,:) = (Fx(2,:)-0)/2;
-% Fx(dim_x,:) = (0-Fx(dim_x-1,:))/2;
-% Fy(:,1) = (Fy(:,2)-0)/2;
-% Fy(:,dim_y) = (0-Fy(:,dim_y-1))/2;
-du = cat(3,Fx,Fy);
-end
-% 
-% 
-% 
-% 
-function u = my_div_backward(du,dim_x,dim_y)
-Fx    = du(:,:,1);
-Fxx   = zeros(size(Fx'));
-Fy    = du(:,:,2);
-Fyy   = zeros(size(Fy));
-Fx = Fx';
-Fxx(2:dim_y,:) = diff(Fx);
-Fxx(1,:) = Fx(1,:);
-Fxx = Fxx';
-Fyy(2:dim_x,:)   = diff(Fy);
-Fyy(1,:) = Fy(1,:);
-% [x, y] = meshgrid(1:1:dim_x,1:1:dim_y);
-% u     = -divergence(x,y,Fx,Fy);
-u = -Fxx-Fyy;
-end
 
 
 
@@ -53,26 +13,56 @@ function du = my_grad_central(u)
 dim_x = size(u,1);
 dim_y = size(u,2);
 [Fx, Fy]=gradient(u);
-Fx(:,1) = (Fx(:,2)-0)/2.0;
-Fx(:,dim_x) = (0-Fx(:,dim_x-1))/2.0;
-Fy(1,:) = (Fy(2,:)-0)/2.0;
-Fy(dim_y,:) = (0-Fy(dim_y-1,:))/2.0;
+Fx(1,:) = (Fx(2,:)-0)/2;
+Fx(dim_x,:) = (0-Fx(dim_x-1,:))/2;
+Fy(:,1) = (Fy(:,2)-0)/2;
+Fy(:,dim_y) = (0-Fy(:,dim_y-1))/2;
 du = cat(3,Fx,Fy);
 end
+
+
+
 
 function u = my_div_central(du,dim_x,dim_y)
 Fx    = du(:,:,1);
 Fy    = du(:,:,2);
-Fxx = gradient(Fx);
+Fxx   = gradient(Fx);
 Fyy   = gradient(Fy');
-% Fyy(1,:) = (Fyy(2,:)-0)/2;
-% Fyy(dim_y,:) = (0-Fyy(dim_y-1,:))/2;
-% disp(["|Fxy-Fyx|",num2str(norm(Fxy-Fyx))])
+Fyy = Fyy';
+Fxx(1,:) = (Fxx(2,:)-0)/2;
+Fxx(dim_x,:) = (0-Fxx(dim_x-1,:))/2;
+Fyy(:,1) = (Fyy(:,2)-0)/2;
+Fyy(:,dim_y) = (0-Fyy(:,dim_y-1))/2;
+% [x, y] = meshgrid(1:1:dim_x,1:1:dim_y);
+% u     = -divergence(x,y,Fx,Fy);
+u = -Fxx-Fyy;
+end
+
+
+
+function du = my_grad(u)
+dim_x = size(u,1);
+dim_y = size(u,2);
+[Fx, Fy]=gradient(u);
+Fx(1,:) = (Fx(2,:)-0)/2;
+Fx(dim_x,:) = (0-Fx(dim_x-1,:))/2;
+Fy(:,1) = (Fy(:,2)-0)/2;
+Fy(:,dim_y) = (0-Fy(:,dim_y-1))/2;
+du = cat(3,Fx,Fy);
+end
+
+function u = my_div(du,dim_x,dim_y)
+Fx    = du(:,:,1);
+Fy    = du(:,:,2);
+[Fxx,Fxy] = gradient(Fx);
+FxyFyy   = gradient(Fy');
+Fyy(1,:) = (Fyy(2,:)-0)/2;
+Fyy(dim_y,:) = (0-Fyy(dim_y-1,:))/2;
 Fyy   = Fyy';
-Fxx(:,1) = (Fxx(:,2)-0)/2.0;
-Fxx(:,dim_x) = (0-Fxx(:,dim_x-1))/2.0;
-Fyy(1,:) = (Fyy(2,:)-0)/2.0;
-Fyy(dim_y,:) = (0-Fyy(dim_y-1,:))/2.0;
+Fxx(1,:) = (Fxx(2,:)-0)/2;
+Fxx(dim_x,:) = (0-Fxx(dim_x-1,:))/2;
+% Fyy(:,1) = (Fyy(:,2)-0)/2;
+% Fyy(:,dim_y) = (0-Fyy(:,dim_y-1))/2;
 % [x, y] = meshgrid(1:1:dim_x,1:1:dim_y);
 % u     = -divergence(x,y,Fx,Fy);
 u = -Fxx-Fyy;

@@ -139,20 +139,47 @@ param_map.lambda = 1 ;
 param_map.normPsi =1 ;
 param_map.lambda = 1 ;
 
-
+()
 [Mop, Mopt] = gradient_op(rand(size(im_true))) ;
 disp("Testing if the gradient forward op and the divergence are true adjoints")
+disp("Test object has size")
+size(im_true)
 xtmp  = rand(param_data.Ny,param_data.Nx) ;
-ytmp  = M(rand(param_data.Ny,param_data.Nx)) ;
-Pxtmp = param_data.Phi(xtmp) ;
-Ptytmp = param_data.Phit(ytmp) ;
-fwd = real(Pxtmp(:)'*ytmp(:)) ;
+ytmp  = Mop(rand(param_data.Ny,param_data.Nx)) ;% ytmp  = param_data.Phi(rand(param_data.Ny,param_data.Nx)) ;
+Pxtmp = Mop(xtmp) ;% Pxtmp = param_data.Phi(xtmp) ;
+Ptytmp = Mopt(ytmp) ;% Ptytmp = param_data.Phit(ytmp) ;
+fwd = Pxtmp(:)'*ytmp(:) ;
 bwd = xtmp(:)'* Ptytmp(:) ;
 disp('test adjoint operator')
 disp(['fwd = ', num2str(fwd)])
 disp(['bwd = ', num2str(bwd)])
 disp(['diff = ', num2str(norm(fwd-bwd)/norm(fwd))])
 
+
+test_matrix = reshape( 1:100, 10, 10) .';
+[Fx,Fy]     = gradient(test_matrix);
+Fx = diff(test_matrix);
+
+
+dim_x = 10;
+dim_y = 10;
+test_matrix = rand(dim_x,dim_y);
+Fy = diff(test_matrix);
+Fy(dim_x,:) = 0-test_matrix(dim_x,:);
+size(Fy)
+Fx = diff(test_matrix');
+Fx = Fx';
+Fx(:,dim_y) = 0-test_matrix(:,dim_y);
+disp('Testing that the differences correspond to the right thing')
+disp('Vertically, i.e. dy')
+disp(['test_matrix(3,1)-test_matrix(2,1)=',num2str(test_matrix(3,1)-test_matrix(2,1))])
+disp(['Fy(2,1)=',num2str(Fy(2,1))])
+disp('Vertically, i.e. dx')
+disp(['test_matrix(3,4)-test_matrix(3,3)=',num2str(test_matrix(3,4)-test_matrix(3,3))])
+disp(['Fx(3,4)=',num2str(Fx(3,3))])
+
+% [Fx,Fy]     = gradient(test_matrix);
+% Fx = gradient(test_matrix);
 
 
 
