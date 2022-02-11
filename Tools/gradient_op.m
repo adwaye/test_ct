@@ -1,12 +1,33 @@
-function [grad, gradt] = gradient_op(im)
+function [grad, gradt] = gradient_op(im,mask)
 dim_x = size(im,1);
 dim_y = size(im,2);
 % [x y] = meshgrid(1:1:dim_x,1:1:dim_y);
-gradt = @(du) my_div_backward(du,dim_x,dim_y);
-grad  = @(u) my_grad_forward(u) ;
+% gradt = @(du) my_div_backward(du,dim_x,dim_y);
+% grad  = @(u) my_grad_forward(u) ;
+gradt = @(du) my_div_backward_masked(du,dim_x,dim_y,mask);
+grad  = @(u) my_grad_forward_masked(u,mask) ;
+
 end
 
 
+
+
+
+function y = my_grad_forward_masked(u,mask)
+
+mmask = cat(3,mask,mask);
+du    = my_grad_forward(u);
+
+y     =  du(mmask>0);
+end
+
+
+function x  = my_div_backward_masked(du,dim_x,dim_y,mask)
+mmask = cat(3,mask,mask);
+Y = zeros(size(mmask));
+Y(mmask>0) = du;
+x = my_div_backward(Y,dim_x,dim_y);
+end
 
 
 function du = my_grad_forward(u)
@@ -14,7 +35,6 @@ dim_x = size(u,1);
 dim_y = size(u,2);
 Fy = diff(u);
 Fy(dim_x,:) = 0-u(dim_x,:);
-size(Fy)
 Fx = diff(u');
 Fx = Fx';
 Fx(:,dim_y) = 0-u(:,dim_y);

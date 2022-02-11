@@ -141,21 +141,58 @@ param_map.lambda = 1 ;
 
 
 disp('-------------------------------------------')
-[Mop, Mopt] = gradient_op(rand(size(im_true))) ;
+[Mop, Mopt] = gradient_op(rand(size(im_true)),mask) ;
 disp("Testing if the gradient forward op and the divergence are true adjoints")
-disp("Test object has size")
-size(im_true)
+disp(["Test object has size =",num2str(size(im_true))])
+disp(["artefact has area =",num2str(sum(mask(:)))])
 xtmp  = rand(param_data.Ny,param_data.Nx) ;
 ytmp  = Mop(rand(param_data.Ny,param_data.Nx)) ;% ytmp  = param_data.Phi(rand(param_data.Ny,param_data.Nx)) ;
+disp(["masked gradient op range dimension =",num2str(size(ytmp))])
 Pxtmp = Mop(xtmp) ;% Pxtmp = param_data.Phi(xtmp) ;
 Ptytmp = Mopt(ytmp) ;% Ptytmp = param_data.Phit(ytmp) ;
 fwd = Pxtmp(:)'*ytmp(:) ;
 bwd = xtmp(:)'* Ptytmp(:) ;
 disp('test adjoint operator')
-disp(['fwd = ', num2str(fwd)])
-disp(['bwd = ', num2str(bwd)])
+disp(['fwd gradmasked= ', num2str(fwd)])
+disp(['bwd divmasked= ', num2str(bwd)])
 disp(['diff = ', num2str(norm(fwd-bwd)/norm(fwd))])
 disp('-------------------------------------------')
+
+
+
+
+
+
+% disp("Testing if the gradient forward op and the divergence are true adjoints with the mask introduced to do the selection")
+% disp("Test object has size")
+% mmask = cat(3,mask,mask);
+% 
+% Y     = zeros(size(mmask));
+% Y(mmask>0) = y;
+% xt    = Mopt(Y);
+% size(im_true)
+% 
+% 
+% xtmp  = rand(param_data.Ny,param_data.Nx) ;
+% ytmp  = Mop(rand(param_data.Ny,param_data.Nx)) ;% ytmp  = param_data.Phi(rand(param_data.Ny,param_data.Nx)) ;
+% ytmp  = ytmp(mmask>0);
+% 
+% Pxtmp = Mop(xtmp) ;% Pxtmp = param_data.Phi(xtmp) ;
+% Pxtmp = Pxtmp(mmask>0);
+% 
+% 
+% Y(mmask>0) = ytmp;
+% Ptytmp = Mopt(Y) ;% Ptytmp = param_data.Phit(ytmp) ;
+% 
+% fwd = Pxtmp(:)'*ytmp(:) ;
+% bwd = xtmp(:)'* Ptytmp(:) ;
+% disp('test adjoint operator')
+% disp(['fwd = ', num2str(fwd)])
+% disp(['bwd = ', num2str(bwd)])
+% disp(['diff = ', num2str(norm(fwd-bwd)/norm(fwd))])
+% disp('-------------------------------------------')
+
+
 
 % test_matrix = reshape( 1:100, 10, 10) .';
 % [Fx,Fy]     = gradient(test_matrix);
