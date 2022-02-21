@@ -21,7 +21,8 @@ query     = strjoin([source_folder,"*slice_*"],'/');
 filenames = dir(query);
 nfiles    = size(filenames,1);
 
-tempname = "curated2_pe_zslice_189.mat";%$change this to process a different slice
+%tempname = "curated2_pe_zslice_189.mat";%$change this to process a different slice
+tempname = "curated2_pe_xslice_225.mat";
 [filepath,fname,ext] = fileparts(tempname);
 
 
@@ -41,11 +42,23 @@ im_true = imresize(im_true,0.5,'Method','bilinear');
 pad_up   = fix((512-size(im_true,1))/2);
 pad_side = fix((512-size(im_true,2))/2);
 im_true = padarray(im_true,[pad_up pad_side],0,'both');
+if size(im_true,1) ~= 512
+    im_true = padarray(im_true,[1 0],0,'post');
+end
+if size(im_true,2) ~= 512
+    im_true = padarray(im_true,[0 1],0,'post');
+end
 
 mask = matfile.labels;
 mask = imresize(mask,0.5,'bilinear');
 mask = double(mask>0);
 mask = padarray(mask,[pad_up pad_side],0,'both');
+if size(mask,1) ~= 512
+    mask = padarray(mask,[1 0],0,'post');
+end
+if size(mask,2) ~= 512
+    mask= padarray(mask,[0 1],0,'post');
+end
 
 seed = 0 ;
 SNR =@(x) 20 * log10(norm(im_true(:))/norm(im_true(:)-x(:)));
@@ -195,13 +208,16 @@ param_hpd.lambda = param_map.lambda ;
 
 
 
-mask = matfile.labels;
-mask = imresize(mask,0.5,'bilinear');
-
-mask = single(mask>0);
-
-mask = padarray(mask,[pad_up pad_side],0,'both');
 mask_struct = mask;
+[row_mask col_mask] = find(mask);
+max_y = max(col_mask,[],'all');
+max_x = max(row_mask,[],'all');
+min_y = max(col_mask,[],'all');
+min_x = max(row_mask,[],'all');
+upper_x = max_x+15;
+lower_x =  min_x-15;
+upper_y = max_y+15;
+lower_y = min_y-15;
 tmp = xmap ; tmp(mask_struct>0) = 0 ;
 
 fig = figure(99), 
@@ -250,10 +266,22 @@ subplot 223, imagesc(im_true), axis image; colorbar, colormap gray, xlabel('true
 subplot 224, imagesc(xmap), axis image; colorbar, colormap gray, xlabel('map')
 
 %param_struct.l2_mean = 0 ;
-texture_mask = zeros(size(xmap));
+if strcmp(tempname,'curated2_pe_zslice_189.mat')
+    texture_mask                  = zeros(size(xmap));
+    texture_mask(255:262,250:256) = 1;
+    texture_mask(260:275,228:244) = 1;
+else
+    texture_mask = matfile.texture_mask;
+    texture_mask = imresize(texture_mask,0.5,'Method','nearest');
+    texture_mask= padarray(texture_mask,[pad_up pad_side],0,'both');
+    if size(texture_mask,1) ~= 512
+        texture_mask = padarray(texture_mask,[1 0],0,'post')
+    end
+    if size(texture_mask,2) ~= 512
+        texture_mask = padarray(texture_mask,[0 1],0,'post');
+    end
+end
 
-texture_mask(255:262,250:256) = 1;
-texture_mask(260:275,228:244) = 1;
 figure(132)
 imagesc((1-texture_mask).*xmap),axis image; colorbar, colormap gray, xlabel('sampled intensities for masked values')
 
@@ -261,6 +289,10 @@ param_struct.l2_mean = sum(texture_mask.*xmap,'all')/sum(texture_mask(:));%mean(
 %param_struct.l2_bound = sqrt(sum(abs(xmap_S(param_struct.Mask>0)).^2)); %AR note: this is theta, oroginal formulation
 param_struct.l2_bound = sqrt(sum(abs(xmap_S(texture_mask>0) - param_struct.l2_mean).^2)/sum(texture_mask(:))); %AR note: this is theta
 %param_struct.l2_bound = 0.1;
+
+figure();
+histogram(xmap(texture_mask>0));
+
 Mop = sparse(sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
 Mopcomp = sparse(numel(param_struct.Mask)-sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
 i = 1; ic = 1;
@@ -330,6 +362,7 @@ else
     disp('*******************************************************')
     disp(' ')
     result = POCS_PD_global_relax_no_Lx_L1(xmap, xmap_S, param_algo, param_data, param_hpd, param_struct) ;
+    sigma4 = 1;
 end
 
 
@@ -341,14 +374,25 @@ disp(['       rho = ',num2str(rho)])
 disp('*****************************************')
 
 fig =figure, 
-subplot 221, imagesc(xmap), axis image; colormap gray; colorbar, xlabel('xmap')
-subplot 222, imagesc(xmap_S), axis image; colormap gray; colorbar, xlabel('xmap - no struct')
-subplot 223, imagesc(result.xC), axis image; colormap gray; colorbar, xlabel('xC')
-subplot 224, imagesc(result.xS), axis image; colormap gray; colorbar, xlabel('xS')
-l2_bound_params = strjoin([param_struct.l2_mean,"l2mean",param_struct.l2_bound,"l2bound"],"_");
+pause(0.00001);
+frame_h = get(handle(gcf),'JavaFrame');
+set(frame_h,'Maximized',1)
+subplot 221, imagesc(xmap), axis image; colormap gray; colorbar, xlabel('xmap'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
+subplot 222, imagesc(xmap_S), axis image; colormap gray; colorbar, xlabel('xmap - no struct'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
+subplot 223, imagesc(result.xC), axis image; colormap gray; colorbar, xlabel('xC'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
+subplot 224, imagesc(result.xS), axis image; colormap gray; colorbar, xlabel('xS'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
+l2_bound_params = strjoin([param_struct.tol_smooth,"tol_smooth",param_struct.l2_mean,"l2mean",param_struct.l2_bound,"l2bound",sigma4,"sigma4"],"_");
+l2_bound_params_fig = strjoin([param_struct.tol_smooth,"tol_smooth",param_struct.l2_mean,"l2mean",param_struct.l2_bound,"l2bound",sigma4,"sigma4"],"-");
+sgtitle(strjoin(["no inpainting l-inifinity ",l2_bound_params_fig]))
+disp(['saving everything as',strjoin([name,"BUQO_problem_results",l2_bound_params,forward_param_names],'_')]);
 fig_name        = strjoin([name,"BUQO_problem_results",l2_bound_params,forward_param_names,"fig"],["_","_","_","."]);
 fig_path = strjoin([target_folder,fig_name],"/");
 saveas(fig,fig_path)
+
+png_fig_name = strjoin([name,"BUQO_problem_results",l2_bound_params,forward_param_names,"png"],["_","_","_","."]);
+png_fig_path = strjoin([target_folder,'png',png_fig_name],"/");
+saveas(fig,png_fig_path)
+
 
 
 L = param_struct.L;
@@ -410,3 +454,7 @@ saveas(fig,fig_path)
 
 
 
+% x = rand(10);
+% tau = 0.5;
+% proj_x = oneProjector(x,tau);
+% proj_x

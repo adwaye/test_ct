@@ -391,7 +391,7 @@ sgtitle(strjoin(["with inpainting l-inifinity ",linf_bound_params_fig]))
 disp(['saving everything as',strjoin([name,"BUQO_problem_results",linf_bound_params,forward_param_names],'_')]);
 fig_name        = strjoin([name,"BUQO_problem_results",linf_bound_params,forward_param_names,"fig"],["_","_","_","."]);
 fig_path = strjoin([target_folder,fig_name],"/");
-
+saveas(fig,fig_path)
 
 png_fig_name = strjoin([name,"BUQO_problem_results",linf_bound_params,forward_param_names,"png"],["_","_","_","."]);
 png_fig_path = strjoin([target_folder,'png',png_fig_name],"/");
@@ -461,7 +461,7 @@ subplot(324);plot(smooth_max), hold on, plot(tau*ones(size(smooth_max)),'r'),  x
 subplot(325);plot(dist2),   xlabel('it'), ylabel('Distance between xc and xs')
 
 
-fig_name        = strjoin([name,"BUQO_problem_convergence",l2_bound_params,forward_param_names,"fig"],["_","_","_","."]);
+fig_name        = strjoin([name,"BUQO_problem_convergence",linf_bound_params,forward_param_names,"fig"],["_","_","_","."]);
 fig_path = strjoin([target_folder,fig_name],"/");
 sgtitle(strjoin(["with inpainting l-inifinity ",linf_bound_params_fig]))
 saveas(fig,fig_path)

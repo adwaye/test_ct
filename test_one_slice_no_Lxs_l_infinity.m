@@ -289,7 +289,7 @@ imagesc((1-texture_mask).*xmap),axis image; colorbar, colormap gray, xlabel('sam
 
 cum_probs     = [0.7,0.8,0.9,0.95 ];
 for j=1:4
-    cum_prob = cum_probs(j)
+    cum_prob = cum_probs(j);
 
     param_struct.l2_mean = 0.725;%sum(texture_mask.*xmap,'all')/sum(texture_mask(:));%mean(xmap_S(param_struct.Mask>0)) ;
     param_struct.linf_bound_max = quantile(xmap(texture_mask>0),1);%max(xmap(texture_mask>0),[],'all');

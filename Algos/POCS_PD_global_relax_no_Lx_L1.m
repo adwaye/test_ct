@@ -18,7 +18,7 @@ sigma2 = sigma1 ;
 % normMbar = op_norm(Mbarop, Mbaropt, [param_data.Ny, param_data.Nx], 1e-4, 200, 0) ;
 % sigma3 = 1 / sqrt( normMbar ) ;
 normM = op_norm(Mop, Mopt, [param_data.Ny, param_data.Nx], 1e-4, 200, 0) ;
-sigma4 = 1 / sqrt( normM ) ;
+sigma4 = 1 / sqrt( normM ) 
 
 
 
@@ -90,7 +90,7 @@ time_tot(1) = 0 ;
 
 
 %% ITERATIONS
-
+    
 for it = 1:param_algo.NbIt
     
     tic;
@@ -112,7 +112,9 @@ for it = 1:param_algo.NbIt
     v4_ = v4 + sigma4 * MxS ;
 %     v4 = v4_ - sigma4 * proj_l2ball( sigma4^(-1) * v4_, param_struct.l2_bound, param_struct.l2_mean ) ;
     % changed this to project on the l1-ball
-    v4 = v4_ - sigma4 * oneProjector( sigma4^(-1) * (v4_-param_struct.l2_mean), param_struct.l2_bound ) ;
+%     v4 = v4_ - sigma4 * oneProjector( sigma4^(-1) * (v4_-param_struct.l2_mean), param_struct.l2_bound ) ;
+%     v4 = v4_ - sigma4 * (oneProjector( (sigma4^(-1)*v4_)-param_struct.l2_mean*param_struct.l2_bound, param_struct.l2_bound)  + param_struct.l2_mean*param_struct.l2_bound);
+    v4 = v4_ - sigma4 * (oneProjector( (sigma4^(-1)*v4_)-param_struct.l2_mean, param_struct.l2_bound)  + param_struct.l2_mean);
     
     xC = xC - tau * ( (xC-xS) + real(param_data.Phit(2*v1-v1old)) + param_hpd.Psi(2*v2-v2old) ) ;
     xC = max(xC,0) ;
