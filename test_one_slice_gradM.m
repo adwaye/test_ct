@@ -15,13 +15,14 @@ addpath(genpath('Tools'))
 
 %% 
 source_folder = "Data/ct_scans/ct1";
-target_folder = "/home/adwaye/matlab_projects/test_CT/Figures/ct1_experiment";
+target_folder = "/home/adwaye/matlab_projects/test_CT/Figures/ct1_experiment_l2_gradient";
 
 query     = strjoin([source_folder,"*slice_*"],'/');
 filenames = dir(query);
 nfiles    = size(filenames,1);
 
-tempname = "curated2_pe_zslice_189.mat";%$change this to process a different slice
+% tempname = "curated2_pe_zslice_189.mat";%$change this to process a different slice
+tempname = "curated2_pe_xslice_225.mat";
 [filepath,fname,ext] = fileparts(tempname);
 
 
@@ -41,11 +42,24 @@ im_true = imresize(im_true,0.5,'Method','bilinear');
 pad_up   = fix((512-size(im_true,1))/2);
 pad_side = fix((512-size(im_true,2))/2);
 im_true = padarray(im_true,[pad_up pad_side],0,'both');
+if size(im_true,1) ~= 512
+    im_true = padarray(im_true,[1 0],0,'post');
+end
+if size(im_true,2) ~= 512
+    im_true = padarray(im_true,[0 1],0,'post');
+end
 
 mask = matfile.labels;
 mask = imresize(mask,0.5,'bilinear');
 mask = double(mask>0);
 mask = padarray(mask,[pad_up pad_side],0,'both');
+if size(mask,1) ~= 512
+    mask = padarray(mask,[1 0],0,'post');
+end
+if size(mask,2) ~= 512
+    mask= padarray(mask,[0 1],0,'post');
+end
+
 
 seed = 0 ;
 SNR =@(x) 20 * log10(norm(im_true(:))/norm(im_true(:)-x(:)));
@@ -97,7 +111,6 @@ subplot 132, imagesc(mask), axis image, colormap gray, colorbar, title("pe locat
 subplot 133, imagesc(geom_shape), axis image, colormap gray, colorbar, title("Adjoint applied applied to one sinogram")
 
 
-
 imshow(geom_shape,[]);colorbar();title("");
 
 % -------------------------------------------------
@@ -132,13 +145,9 @@ subplot 133, imagesc(im_fbp), axis image, colormap gray, colorbar, xlabel(['FBP 
 
 %%
 
-
 [param_map.Psi, param_map.Psit] = wavelet_op(rand(size(im_true)), 4) ;
 param_map.normPsi =1 ;
 param_map.lambda = 1 ;
-param_map.normPsi =1 ;
-param_map.lambda = 1 ;
-
 
 disp('-------------------------------------------')
 [Mop, Mopt] = gradient_op(rand(size(im_true)),mask) ;
@@ -161,65 +170,310 @@ disp('-------------------------------------------')
 
 
 
+sig1 = 0.7/param_map.normPsi ;
+sig2 = 0.7/param_data.normPhi ;
+tau = 0.99 / (sig1*param_map.normPsi + sig2*param_data.normPhi) ;
+disp(['tau = ', num2str(tau)])
+disp(['sig1 = ', num2str(sig1)])
+disp(['sig2 = ', num2str(sig2)])
 
-
-% disp("Testing if the gradient forward op and the divergence are true adjoints with the mask introduced to do the selection")
-% disp("Test object has size")
-% mmask = cat(3,mask,mask);
-% 
-% Y     = zeros(size(mmask));
-% Y(mmask>0) = y;
-% xt    = Mopt(Y);
-% size(im_true)
-% 
-% 
-% xtmp  = rand(param_data.Ny,param_data.Nx) ;
-% ytmp  = Mop(rand(param_data.Ny,param_data.Nx)) ;% ytmp  = param_data.Phi(rand(param_data.Ny,param_data.Nx)) ;
-% ytmp  = ytmp(mmask>0);
-% 
-% Pxtmp = Mop(xtmp) ;% Pxtmp = param_data.Phi(xtmp) ;
-% Pxtmp = Pxtmp(mmask>0);
-% 
-% 
-% Y(mmask>0) = ytmp;
-% Ptytmp = Mopt(Y) ;% Ptytmp = param_data.Phit(ytmp) ;
-% 
-% fwd = Pxtmp(:)'*ytmp(:) ;
-% bwd = xtmp(:)'* Ptytmp(:) ;
-% disp('test adjoint operator')
-% disp(['fwd = ', num2str(fwd)])
-% disp(['bwd = ', num2str(bwd)])
-% disp(['diff = ', num2str(norm(fwd-bwd)/norm(fwd))])
-% disp('-------------------------------------------')
+max_it = 20000 ;
+stop_it = 1e-4 ;
+stop_norm = 1e-4 ;
 
 
 
-% test_matrix = reshape( 1:100, 10, 10) .';
-% [Fx,Fy]     = gradient(test_matrix);
-% Fx = diff(test_matrix);
+
+forward_param_names       = strjoin([param_data.sig_noise,"noise",geom.ndetectors,"ndtct",geom.n_angles,"agls",geom.spacing,"grdsz"],"_");
+results_name        = strjoin([name,"forward_problem_results",forward_param_names,"mat"],["_","_","."]);
+results_path        = strjoin([target_folder ,results_name],'/');
+if isfile(results_path)
+    load(results_path)
+else
+    [xmap, fid, reg, norm_it, snr_it, time_it,time_total] = MAP_primal_dual(param_data, param_map, tau, sig1, sig2, max_it, stop_it, stop_norm, SNR) ;    
+    save(results_path,'xmap','fid','reg','norm_it','snr_it','time_it','time_total')
+end
+xmap = double(xmap);
 % 
-% 
-% dim_x = 10;
-% dim_y = 10;
-% test_matrix = rand(dim_x,dim_y);
-% Fy = diff(test_matrix);
-% Fy(dim_x,:) = 0-test_matrix(dim_x,:);
-% size(Fy)
-% Fx = diff(test_matrix');
-% Fx = Fx';
-% Fx(:,dim_y) = 0-test_matrix(:,dim_y);
-% disp('Testing that the differences correspond to the right thing')
-% disp('Vertically, i.e. dy')
-% disp(['test_matrix(3,1)-test_matrix(2,1)=',num2str(test_matrix(3,1)-test_matrix(2,1))])
-% disp(['Fy(2,1)=',num2str(Fy(2,1))])
-% disp('Vertically, i.e. dx')
-% disp(['test_matrix(3,4)-test_matrix(3,3)=',num2str(test_matrix(3,4)-test_matrix(3,3))])
-% disp(['Fx(3,4)=',num2str(Fx(3,3))])
-
-% [Fx,Fy]     = gradient(test_matrix);
-% Fx = gradient(test_matrix);
 
 
+
+
+
+
+fig = figure, 
+subplot 221, imagesc(im_true), axis image, colormap gray, colorbar, xlabel('true')
+subplot 222, imagesc(mask), axis image, colormap gray, colorbar, xlabel('mask')
+subplot 223, imagesc(im_fbp), axis image, colormap gray, colorbar, xlabel(['FBP - SNR ', num2str(SNR(im_fbp))])
+subplot 224, imagesc(xmap), axis image, colormap gray, colorbar, xlabel(['xmap - SNR ', num2str(snr_it(end))])
+
+
+
+
+%%
+
+param_hpd.lambda_t = param_data.N / sum(abs(param_map.Psit(xmap))) ;
+
+
+alpha = 1e-2 ; 
+talpha = sqrt( (16*log(3/alpha)) / param_data.N );
+HPDconstraint = param_hpd.lambda_t* sum(abs(param_map.Psit(xmap))) ...
+                + param_data.N*(1+talpha);
+param_hpd.HPDconstraint = HPDconstraint/param_hpd.lambda_t ;
+
+
+param_hpd.Psit = param_map.Psit ;
+param_hpd.Psi = param_map.Psi ;
+param_hpd.normPsi = param_map.normPsi ;
+param_hpd.lambda = param_map.lambda ;
+
+
+
+mask_struct = mask;
+[row_mask col_mask] = find(mask);
+max_y = max(col_mask,[],'all');
+max_x = max(row_mask,[],'all');
+min_y = max(col_mask,[],'all');
+min_x = max(row_mask,[],'all');
+upper_x = max_x+15;
+lower_x =  min_x-15;
+upper_y = max_y+15;
+lower_y = min_y-15;
+tmp = xmap ; tmp(mask_struct>0) = 0 ;
+
+fig = figure(99), 
+subplot 221, imagesc(mask),colorbar(),title("mask"), axis image, colormap gray
+subplot 222, imagesc(tmp),colorbar(),title("reverse masked image"), axis image, colormap gray
+subplot 223, imagesc(im_true),colorbar(),title("ground truth"), axis image, colormap gray
+subplot 224, imagesc(xmap),colorbar(),title("map estimate"), axis image, colormap gray
+fig_name = strjoin([name,"fwd_res",forward_param_names,"fig"],["_","_","."]);
+fig_path = strjoin([target_folder,fig_name],"/");
+saveas(fig,fig_path)
+
+
+%imwrite(im_true,'figures/g_truth')
+
+
+
+%===========================================================================
+% RUNNING BUQO NOW
+%===========================================================================
+
+
+param_struct.Mask       = mask_struct; % Mask to select structure to test
+param_struct.choice_set = 'l2_const' ;
+param_struct.Size_Gauss_kern = [3,7,11] ;
+disp('create inpainting operator...')
+disp('     -- recursive - can take few minutes... --')
+param_struct.L = create_inpainting_operator_test(param_struct.Mask, param_struct.Size_Gauss_kern, xmap) ;
+disp('...done')
+param_struct.L = sparse(param_struct.L) ;
+
+param_struct.Lbar = sparse([-speye(sum(param_struct.Mask(:))), param_struct.L]) ;
+param_struct.Nout = sum(param_struct.Mask(:)==0) ;
+param_struct.normL = op_norm(@(x) param_struct.L*x, @(x) param_struct.L'*x, [param_struct.Nout,1], 1e-4, 200, 0);  
+param_struct.normLbar = op_norm(@(x) param_struct.Lbar*x, @(x) param_struct.Lbar'*x, [numel(param_struct.Mask),1], 1e-4, 200, 0);  
+
+param_struct.Li =@(u) [param_struct.L*u ; u] ;
+param_struct.Lit =@(x) param_struct.L'*x(param_struct.Mask>0) + x(param_struct.Mask==0) ;
+param_struct.normLi = op_norm(param_struct.Lit, param_struct.Li, [numel(param_struct.Mask),1], 1e-4, 200, 0);  
+
+xmap_S = xmap ;
+xmap_S(param_struct.Mask>0) = param_struct.L*xmap(param_struct.Mask==0) ;
+fig=figure, 
+subplot 221, imagesc(tmp), axis image; colorbar, colormap gray, xlabel('map without struct')
+subplot 222, imagesc(xmap_S), axis image ; colorbar, colormap gray, xlabel('smoothed struct')
+subplot 223, imagesc(im_true), axis image; colorbar, colormap gray, xlabel('true')
+subplot 224, imagesc(xmap), axis image; colorbar, colormap gray, xlabel('map')
+
+%param_struct.l2_mean = 0 ;
+if strcmp(tempname,'curated2_pe_zslice_189.mat')
+    texture_mask                  = zeros(size(xmap));
+    texture_mask(255:262,250:256) = 1;
+    texture_mask(260:275,228:244) = 1;
+else
+    texture_mask = matfile.texture_mask;
+    texture_mask = imresize(texture_mask,0.5,'Method','nearest');
+    texture_mask= padarray(texture_mask,[pad_up pad_side],0,'both');
+    if size(texture_mask,1) ~= 512
+        texture_mask = padarray(texture_mask,[1 0],0,'post')
+    end
+    if size(texture_mask,2) ~= 512
+        texture_mask = padarray(texture_mask,[0 1],0,'post');
+    end
+end
+
+figure(132)
+imagesc((1-texture_mask).*xmap),axis image; colorbar, colormap gray, xlabel('sampled intensities for masked values')
+
+[fx, fy] = gradient(xmap);
+sampled_gradients  = [texture_mask.*fx, texture_mask.*fy];
+param_struct.l2_mean = sum(sampled_gradients,'all')/sum(2*texture_mask(:));%mean(xmap_S(param_struct.Mask>0)) ;
+%param_struct.l2_bound = sqrt(sum(abs(xmap_S(param_struct.Mask>0)).^2)); %AR note: this is theta, oroginal formulation
+param_struct.l2_bound = sqrt(sum(abs(sampled_gradients - param_struct.l2_mean).^2,'all')/sum(2*texture_mask(:))); %AR note: this is theta
+%param_struct.l2_bound = 0.1;
+
+figure();
+histogram(xmap(texture_mask>0));
+
+Mop = sparse(sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
+Mopcomp = sparse(numel(param_struct.Mask)-sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
+i = 1; ic = 1;
+for n = 1:numel(param_struct.Mask)
+    if(param_struct.Mask(n))==0
+        Mopcomp(ic,n) = 1 ;
+        ic = ic+1 ;
+    else
+        Mop(i,n) = 1;
+        i = i+1 ;
+    end
+end
+
+param_struct.Mop = Mop ;
+param_struct.Mbarop = Mop - param_struct.L*Mopcomp;
+
+param_struct.l2b_Mask = sqrt(sum(param_struct.Mask(:)) + 2* sqrt(sum(param_struct.Mask(:)))) *  param_data.sig_noise ;
+xM_ = param_struct.Mop * xmap(:) ;
+param_struct.tol_smooth = std(xM_) ; %1e-5  ;AR note: this is [-tau,+tau]
+
+
+param_struct.Psi = param_hpd.Psi ;
+param_struct.Psit = param_hpd.Psit ;
+param_struct.normPsi = param_hpd.normPsi ;
+param_struct.l1bound = param_hpd.HPDconstraint ; 
+
+
+
+
+
+
+
+
+%%
+
+param_algo.NbIt = 10000 ;
+param_algo.stop_dist = 1e-4 ;
+param_algo.stop_norm2 = 1e-4 ;
+param_algo.stop_norm1 = 1e-4 ;
+param_algo.stop_err_smooth = 1e-4 ;
+
+
+
+l1_mapS = sum(abs(param_map.Psit(xmap_S))) ;
+l2_mapS = sqrt(sum( abs( param_data.Phi(xmap_S) - param_data.y ).^2 ,'all')) ;
+
+
+disp(' ')
+disp(' ')
+disp(' ')
+disp(' ')
+disp(' ')
+disp('*******************************************************')
+disp('*******************************************************')
+disp(['l1 inpaint = ',num2str(l1_mapS)])
+disp(['HPD bound = ',num2str(param_hpd.HPDconstraint)])
+disp(['l2 data inpaint = ',num2str(l2_mapS)])
+disp(['data bound = ',num2str(param_data.data_eps)])
+
+if l1_mapS <= param_hpd.HPDconstraint && l2_mapS <= param_data.data_eps
+    disp('Intersection between S and Calpha nonempty')
+    disp('*******************************************************')
+    result.xS = xmap_S ;
+    result.xC = xmap_S ;
+else
+    disp('xmap_S OUTSIDE Calpha -> run alternating projections')
+    disp('*******************************************************')
+    disp(' ')
+    result = POCS_PD_global_relax(xmap, xmap_S, param_algo, param_data, param_hpd, param_struct) ;
+end
+
+
+rho  = norm( result.xC(:) - result.xS(:) ) / ...
+       norm( xmap(:) - xmap_S(:) ) ;
+disp(' ')
+disp('*****************************************')
+disp(['       rho = ',num2str(rho)])
+disp('*****************************************')
+
+fig =figure, 
+pause(0.00001);
+frame_h = get(handle(gcf),'JavaFrame');
+set(frame_h,'Maximized',1)
+subplot 221, imagesc(xmap), axis image; colormap gray; colorbar, xlabel('xmap'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
+subplot 222, imagesc(xmap_S), axis image; colormap gray; colorbar, xlabel('xmap - no struct'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
+subplot 223, imagesc(result.xC), axis image; colormap gray; colorbar, xlabel('xC'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
+subplot 224, imagesc(result.xS), axis image; colormap gray; colorbar, xlabel('xS'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
+l2_bound_params = strjoin([param_struct.Size_Gauss_kern,"kernel",param_struct.tol_smooth,"tol_smooth",param_struct.l2_mean,"l2mean",param_struct.l2_bound,"l2bound",sigma4,"sigma4"],"_");
+l2_bound_params_fig = strjoin([param_struct.Size_Gauss_kern,"kernel",param_struct.tol_smooth,"tol_smooth",param_struct.l2_mean,"l2mean",param_struct.l2_bound,"l2bound",sigma4,"sigma4"],"-");
+sgtitle(strjoin(["with inpainting l-inifinity ",l2_bound_params_fig]))
+disp(['saving everything as',strjoin([name,"BUQO_problem_results",l2_bound_params,forward_param_names],'_')]);
+fig_name        = strjoin([name,"BUQO_problem_results",l2_bound_params,forward_param_names,"fig"],["_","_","_","."]);
+fig_path = strjoin([target_folder,fig_name],"/");
+saveas(fig,fig_path)
+
+png_fig_name = strjoin([name,"BUQO_problem_results",l2_bound_params,forward_param_names,"png"],["_","_","_","."]);
+png_fig_path = strjoin([target_folder,'png',png_fig_name],"/");
+saveas(fig,png_fig_path)
+
+
+L = param_struct.L;
+Mask = param_struct.Mask;
+
+
+lambda_t = param_hpd.lambda_t;
+
+hpd_constraint = param_hpd.HPDconstraint;
+epsilon        = param_data.data_eps;
+theta          = param_struct.l2_bound;
+tau            = param_struct.tol_smooth;
+
+phi_imtrue     = param_data.Phi(im_true);
+phit_imtrue    = param_data.Phit(phi_imtrue);
+psi_imtrue     = param_map.Psit(im_true);
+psit_imtrue     = param_map.Psi(psi_imtrue);
+x_c            = result.xC;
+x_s            = result.xS;
+Mop_imtrue     = param_struct.Mop*im_true(:);
+Mopt =@(v) reshape(param_struct.Mop'*v, param_data.Ny, param_data.Nx);
+Mopt_imtrue     = Mopt(Mop_imtrue(:));
+Lbar_imtrue    = param_struct.Mbarop*im_true(:);
+Mbaropt =@(v) reshape(param_struct.Mbarop'*v, param_data.Ny, param_data.Nx) ;
+Lbart_imtrue = Mbaropt(Lbar_imtrue);
+fft_imtrue   = TF(im_true,numel(im_true));
+struct_mask   = param_struct.Mask;
+
+time_tot = result.time;
+
+dist2 = result.dist2  ;
+l2data = result.l2data ;
+l1reg = result.l1reg   ;
+l2smooth = result.l2smooth ;
+smooth_max = result.smooth_max ;
+
+
+
+
+
+
+
+results_name        = strjoin([name,"BUQO_problem_results",l2_bound_params,forward_param_names,"mat"],["_","_","_","."]);
+results_path        = strjoin([target_folder ,results_name],'/');
+save(results_path,'xmap','hpd_constraint','theta','tau','epsilon','struct_mask','phi_imtrue','x_c','x_s','dist2','l2data','l1reg','l2smooth','rho')
+
+
+
+fig =figure, 
+subplot(321);plot(l1reg), hold on, plot(hpd_constraint*ones(size(l1reg)),'r'),xlabel('it'), ylabel('l1 norm regulariser hpd-psi xc'), 
+subplot(322);plot(l2data), hold on, plot(epsilon*ones(size(l2data)),'r'), xlabel('it'), ylabel('l2 norm data fit-phi xc')
+subplot(323);plot(l2smooth), hold on, plot(theta*ones(size(l2smooth)),'r'),  xlabel('it'), ylabel('Mask energy-Mxs')
+subplot(324);plot(smooth_max), hold on, plot(tau*ones(size(smooth_max)),'r'),  xlabel('it'), ylabel('inpainting energy-Lbar xs')
+subplot(325);plot(dist2),   xlabel('it'), ylabel('Distance between xc and xs')
+
+
+fig_name        = strjoin([name,"BUQO_problem_convergence",l2_bound_params,forward_param_names,"fig"],["_","_","_","."]);
+fig_path = strjoin([target_folder,fig_name],"/");
+sgtitle(strjoin(["with inpainting l-inifinity ",l2_bound_params_fig]))
+saveas(fig,fig_path)
 
 
 
