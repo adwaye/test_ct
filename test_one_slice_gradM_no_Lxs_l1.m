@@ -12,25 +12,10 @@ addpath Data/
 addpath Tools/
 addpath(genpath('Tools'))
 
-norm_name = "Linf"; %choose from L1, L2, Linf
-inpainting = false;%
-if inpainting
-    inpainting_ext = "Lx";
-else
-    inpainting_ext = "noLx";
-end
-
-algo_name = strjoin(["POCS",norm_name,"gradM",inpainting_ext],'_');
-BUQO_algo = str2func(algo_name);
-
-
 
 %% 
 source_folder = "Data/ct_scans/ct1";
-folder_name   = strjoin(["ct1_experiment",norm_name,"gradM",inpainting_ext],'_');
-target_folder = strjoin(["/home/adwaye/matlab_projects/test_CT/Figures",folder_name],'/');
-mkdir(target_folder);
-mkdir(strjoin([target_folder,"png"],'/'))
+target_folder = "/home/adwaye/matlab_projects/test_CT/Figures/ct1_experiment_l1_gradient_no_Lxs";
 
 query     = strjoin([source_folder,"*slice_*"],'/');
 filenames = dir(query);
@@ -89,8 +74,8 @@ param_data.Ny = size(im_true,2);
 vol_geom = astra_create_vol_geom(param_data.Nx,param_data.Ny);
 %create a parallel projection geometry with spacing =1 pixel, 384 
 geom.spacing    = 1.34;% 1/(nx*ny);
-geom.ndetectors = 500;
-geom.n_angles   = 400;
+geom.ndetectors = 384;
+geom.n_angles   = 200;
 geom.angles     = linspace2(0,pi,geom.n_angles);%use more angles
 proj_geom       = astra_create_proj_geom('parallel', geom.spacing, geom.ndetectors, geom.angles);
 geom.proj       = proj_geom;
@@ -163,6 +148,27 @@ subplot 133, imagesc(im_fbp), axis image, colormap gray, colorbar, xlabel(['FBP 
 [param_map.Psi, param_map.Psit] = wavelet_op(rand(size(im_true)), 4) ;
 param_map.normPsi =1 ;
 param_map.lambda = 1 ;
+
+disp('-------------------------------------------')
+[Mop, Mopt] = gradient_op(rand(size(im_true)),mask) ;
+disp("Testing if the gradient forward op and the divergence are true adjoints")
+disp(["Test object has size =",num2str(size(im_true))])
+disp(["artefact has area =",num2str(sum(mask(:)))])
+xtmp  = rand(param_data.Ny,param_data.Nx) ;
+ytmp  = Mop(rand(param_data.Ny,param_data.Nx)) ;% ytmp  = param_data.Phi(rand(param_data.Ny,param_data.Nx)) ;
+disp(["masked gradient op range dimension =",num2str(size(ytmp))])
+Pxtmp = Mop(xtmp) ;% Pxtmp = param_data.Phi(xtmp) ;
+Ptytmp = Mopt(ytmp) ;% Ptytmp = param_data.Phit(ytmp) ;
+fwd = Pxtmp(:)'*ytmp(:) ;
+bwd = xtmp(:)'* Ptytmp(:) ;
+disp('test adjoint operator')
+disp(['fwd gradmasked= ', num2str(fwd)])
+disp(['bwd divmasked= ', num2str(bwd)])
+disp(['diff = ', num2str(norm(fwd-bwd)/norm(fwd))])
+disp('-------------------------------------------')
+
+
+
 
 sig1 = 0.7/param_map.normPsi ;
 sig2 = 0.7/param_data.normPhi ;
@@ -306,52 +312,28 @@ param_struct.l2_mean = sum(sampled_gradients,'all')/sum(2*texture_mask(:));%mean
 %param_struct.l2_bound = sqrt(sum(abs(xmap_S(param_struct.Mask>0)).^2)); %AR note: this is theta, oroginal formulation
 param_struct.l2_bound = sqrt(sum(abs(sampled_gradients - param_struct.l2_mean).^2,'all')/sum(2*texture_mask(:))); %AR note: this is theta
 %param_struct.l2_bound = 0.1;
-sampled_gradients = [fx(texture_mask>0),fy(texture_mask>0)];
-param_struct.linf_bound_max = quantile(sampled_gradients(:),1);%max(xmap(texture_mask>0),[],'all');
-param_struct.linf_bound_min = 0;%quantile(xmap(texture_mask>0),1-cum_prob);%min(xmap(texture_mask>0),[],'all');
 
 figure();
 histogram(xmap(texture_mask>0));
 
-Mask_op = sparse(sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
-Mask_op_comp = sparse(numel(param_struct.Mask)-sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
+Mop = sparse(sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
+Mopcomp = sparse(numel(param_struct.Mask)-sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
 i = 1; ic = 1;
 for n = 1:numel(param_struct.Mask)
     if(param_struct.Mask(n))==0
-        Mask_op_comp(ic,n) = 1 ;
+        Mopcomp(ic,n) = 1 ;
         ic = ic+1 ;
     else
-        Mask_op(i,n) = 1;
+        Mop(i,n) = 1;
         i = i+1 ;
     end
 end
 
-
-disp('-------------------------------------------')
-[Mop, Mopt] = gradient_op(rand(size(im_true)),mask) ;
-disp("Testing if the gradient forward op and the divergence are true adjoints")
-disp(["Test object has size =",num2str(size(im_true))])
-disp(["artefact has area =",num2str(sum(mask(:)))])
-xtmp  = rand(param_data.Ny,param_data.Nx) ;
-ytmp  = Mop(rand(param_data.Ny,param_data.Nx)) ;% ytmp  = param_data.Phi(rand(param_data.Ny,param_data.Nx)) ;
-disp(["masked gradient op range dimension =",num2str(size(ytmp))])
-Pxtmp = Mop(xtmp) ;% Pxtmp = param_data.Phi(xtmp) ;
-Ptytmp = Mopt(ytmp) ;% Ptytmp = param_data.Phit(ytmp) ;
-fwd = Pxtmp(:)'*ytmp(:) ;
-bwd = xtmp(:)'* Ptytmp(:) ;
-disp('test adjoint operator')
-disp(['fwd gradmasked= ', num2str(fwd)])
-disp(['bwd divmasked= ', num2str(bwd)])
-disp(['diff = ', num2str(norm(fwd-bwd)/norm(fwd))])
-disp('-------------------------------------------')
-
-
 param_struct.Mop = Mop ;
-param_struct.Mopt = Mopt;
-param_struct.Mbarop = Mask_op - param_struct.L*Mask_op_comp;
+param_struct.Mbarop = Mop - param_struct.L*Mopcomp;
 
 param_struct.l2b_Mask = sqrt(sum(param_struct.Mask(:)) + 2* sqrt(sum(param_struct.Mask(:)))) *  param_data.sig_noise ;
-xM_ = Mask_op * xmap(:) ;
+xM_ = param_struct.Mop * xmap(:) ;
 param_struct.tol_smooth = std(xM_) ; %1e-5  ;AR note: this is [-tau,+tau]
 
 
@@ -402,7 +384,7 @@ else
     disp('xmap_S OUTSIDE Calpha -> run alternating projections')
     disp('*******************************************************')
     disp(' ')
-    result = BUQO_algo(xmap, xmap_S, param_algo, param_data, param_hpd, param_struct) ;
+    result = POCS_PD_global_relax_no_Lx_L1(xmap, xmap_S, param_algo, param_data, param_hpd, param_struct) ;
     sigma4 = 1;
 end
 
@@ -467,7 +449,7 @@ dist2 = result.dist2  ;
 l2data = result.l2data ;
 l1reg = result.l1reg   ;
 l2smooth = result.l2smooth ;
-smooth_max = result.smooth_max ;
+% smooth_max = result.smooth_max ;
 
 
 
