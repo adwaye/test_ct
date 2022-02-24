@@ -12,7 +12,7 @@ addpath Data/
 addpath Tools/
 addpath(genpath('Tools'))
 
-norm_name = "Linf"; %choose from L1, L2, Linf
+norm_name = "L2"; %choose from L1, L2, Linf
 inpainting = false;%
 if inpainting
     inpainting_ext = "Lx";
@@ -301,198 +301,300 @@ figure(132)
 imagesc((1-texture_mask).*xmap),axis image; colorbar, colormap gray, xlabel('sampled intensities for masked values')
 
 [fx, fy] = gradient(xmap);
-sampled_gradients  = [texture_mask.*fx, texture_mask.*fy];
-param_struct.l2_mean = sum(sampled_gradients,'all')/sum(2*texture_mask(:));%mean(xmap_S(param_struct.Mask>0)) ;
-%param_struct.l2_bound = sqrt(sum(abs(xmap_S(param_struct.Mask>0)).^2)); %AR note: this is theta, oroginal formulation
-param_struct.l2_bound = sqrt(sum(abs(sampled_gradients - param_struct.l2_mean).^2,'all')/sum(2*texture_mask(:))); %AR note: this is theta
-%param_struct.l2_bound = 0.1;
 sampled_gradients = [fx(texture_mask>0),fy(texture_mask>0)];
-param_struct.linf_bound_max = quantile(sampled_gradients(:),1);%max(xmap(texture_mask>0),[],'all');
-param_struct.linf_bound_min = 0;%quantile(xmap(texture_mask>0),1-cum_prob);%min(xmap(texture_mask>0),[],'all');
+
+mean_values  = [mean(sampled_gradients(:)),0,0,0];
+bound_values = [std(sampled_gradients(:)) ,std(sampled_gradients(:)),0.5,0.4,0.3];
+
+max_values = [quantile(sampled_gradients(:),0.9),quantile(sampled_gradients(:),0.8),quantile(sampled_gradients(:),0.6)];
+min_values = [quantile(sampled_gradients(:),0.1),quantile(sampled_gradients(:),0.2),quantile(sampled_gradients(:),0.4)];
+
+
+if norm_name=='Linf'
+   array1 = max_values;
+   array2 = min_values;
+else
+    array1 = mean_values;
+    array2 = min_values;
+end
 
 figure();
-histogram(xmap(texture_mask>0));
+histogram(sampled_gradients);
+max_l = size(array1,1);
 
-Mask_op = sparse(sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
-Mask_op_comp = sparse(numel(param_struct.Mask)-sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
-i = 1; ic = 1;
-for n = 1:numel(param_struct.Mask)
-    if(param_struct.Mask(n))==0
-        Mask_op_comp(ic,n) = 1 ;
-        ic = ic+1 ;
-    else
-        Mask_op(i,n) = 1;
-        i = i+1 ;
+for bound_num = 1:max_l
+    
+    param_struct.linf_bound_max = array1(bound_num);
+    param_struct.linf_bound_min = array2(bound_num);
+
+    param_struct.l2_mean = array1(bound_num)  ;
+    param_struct.l2_bound= array2(bound_num)  ;
+
+
+    
+
+    Mask_op = sparse(sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
+    Mask_op_comp = sparse(numel(param_struct.Mask)-sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
+    i = 1; ic = 1;
+    for n = 1:numel(param_struct.Mask)
+        if(param_struct.Mask(n))==0
+            Mask_op_comp(ic,n) = 1 ;
+            ic = ic+1 ;
+        else
+            Mask_op(i,n) = 1;
+            i = i+1 ;
+        end
     end
-end
 
 
-disp('-------------------------------------------')
-[Mop, Mopt] = gradient_op(rand(size(im_true)),mask) ;
-disp("Testing if the gradient forward op and the divergence are true adjoints")
-disp(["Test object has size =",num2str(size(im_true))])
-disp(["artefact has area =",num2str(sum(mask(:)))])
-xtmp  = rand(param_data.Ny,param_data.Nx) ;
-ytmp  = Mop(rand(param_data.Ny,param_data.Nx)) ;% ytmp  = param_data.Phi(rand(param_data.Ny,param_data.Nx)) ;
-disp(["masked gradient op range dimension =",num2str(size(ytmp))])
-Pxtmp = Mop(xtmp) ;% Pxtmp = param_data.Phi(xtmp) ;
-Ptytmp = Mopt(ytmp) ;% Ptytmp = param_data.Phit(ytmp) ;
-fwd = Pxtmp(:)'*ytmp(:) ;
-bwd = xtmp(:)'* Ptytmp(:) ;
-disp('test adjoint operator')
-disp(['fwd gradmasked= ', num2str(fwd)])
-disp(['bwd divmasked= ', num2str(bwd)])
-disp(['diff = ', num2str(norm(fwd-bwd)/norm(fwd))])
-disp('-------------------------------------------')
+    disp('-------------------------------------------')
+    [Mop, Mopt] = gradient_op(rand(size(im_true)),mask) ;
+    disp("Testing if the gradient forward op and the divergence are true adjoints")
+    disp(["Test object has size =",num2str(size(im_true))])
+    disp(["artefact has area =",num2str(sum(mask(:)))])
+    xtmp  = rand(param_data.Ny,param_data.Nx) ;
+    ytmp  = Mop(rand(param_data.Ny,param_data.Nx)) ;% ytmp  = param_data.Phi(rand(param_data.Ny,param_data.Nx)) ;
+    disp(["masked gradient op range dimension =",num2str(size(ytmp))])
+    Pxtmp = Mop(xtmp) ;% Pxtmp = param_data.Phi(xtmp) ;
+    Ptytmp = Mopt(ytmp) ;% Ptytmp = param_data.Phit(ytmp) ;
+    fwd = Pxtmp(:)'*ytmp(:) ;
+    bwd = xtmp(:)'* Ptytmp(:) ;
+    disp('test adjoint operator')
+    disp(['fwd gradmasked= ', num2str(fwd)])
+    disp(['bwd divmasked= ', num2str(bwd)])
+    disp(['diff = ', num2str(norm(fwd-bwd)/norm(fwd))])
+    disp('-------------------------------------------')
 
 
-param_struct.Mop = Mop ;
-param_struct.Mopt = Mopt;
-param_struct.Mbarop = Mask_op - param_struct.L*Mask_op_comp;
+    param_struct.Mop = Mop ;
+    param_struct.Mopt = Mopt;
+    param_struct.Mbarop = Mask_op - param_struct.L*Mask_op_comp;
 
-param_struct.l2b_Mask = sqrt(sum(param_struct.Mask(:)) + 2* sqrt(sum(param_struct.Mask(:)))) *  param_data.sig_noise ;
-xM_ = Mask_op * xmap(:) ;
-param_struct.tol_smooth = std(xM_) ; %1e-5  ;AR note: this is [-tau,+tau]
-
-
-param_struct.Psi = param_hpd.Psi ;
-param_struct.Psit = param_hpd.Psit ;
-param_struct.normPsi = param_hpd.normPsi ;
-param_struct.l1bound = param_hpd.HPDconstraint ; 
+    param_struct.l2b_Mask = sqrt(sum(param_struct.Mask(:)) + 2* sqrt(sum(param_struct.Mask(:)))) *  param_data.sig_noise ;
+    xM_ = Mask_op * xmap(:) ;
+    param_struct.tol_smooth = std(xM_) ; %1e-5  ;AR note: this is [-tau,+tau]
 
 
+    param_struct.Psi = param_hpd.Psi ;
+    param_struct.Psit = param_hpd.Psit ;
+    param_struct.normPsi = param_hpd.normPsi ;
+    param_struct.l1bound = param_hpd.HPDconstraint ; 
 
 
 
 
 
 
-%%
-
-param_algo.NbIt = 10000 ;
-param_algo.stop_dist = 1e-4 ;
-param_algo.stop_norm2 = 1e-4 ;
-param_algo.stop_norm1 = 1e-4 ;
-param_algo.stop_err_smooth = 1e-4 ;
 
 
+    %%
 
-l1_mapS = sum(abs(param_map.Psit(xmap_S))) ;
-l2_mapS = sqrt(sum( abs( param_data.Phi(xmap_S) - param_data.y ).^2 ,'all')) ;
+    param_algo.NbIt = 10000 ;
+    param_algo.stop_dist = 1e-4 ;
+    param_algo.stop_norm2 = 1e-4 ;
+    param_algo.stop_norm1 = 1e-4 ;
+    param_algo.stop_err_smooth = 1e-4 ;
 
 
-disp(' ')
-disp(' ')
-disp(' ')
-disp(' ')
-disp(' ')
-disp('*******************************************************')
-disp('*******************************************************')
-disp(['l1 inpaint = ',num2str(l1_mapS)])
-disp(['HPD bound = ',num2str(param_hpd.HPDconstraint)])
-disp(['l2 data inpaint = ',num2str(l2_mapS)])
-disp(['data bound = ',num2str(param_data.data_eps)])
 
-if l1_mapS <= param_hpd.HPDconstraint && l2_mapS <= param_data.data_eps
-    disp('Intersection between S and Calpha nonempty')
-    disp('*******************************************************')
-    result.xS = xmap_S ;
-    result.xC = xmap_S ;
-else
-    disp('xmap_S OUTSIDE Calpha -> run alternating projections')
-    disp('*******************************************************')
+    l1_mapS = sum(abs(param_map.Psit(xmap_S))) ;
+    l2_mapS = sqrt(sum( abs( param_data.Phi(xmap_S) - param_data.y ).^2 ,'all')) ;
+
+
     disp(' ')
-    result = BUQO_algo(xmap, xmap_S, param_algo, param_data, param_hpd, param_struct) ;
-    sigma4 = 1;
+    disp(' ')
+    disp(' ')
+    disp(' ')
+    disp(' ')
+    disp('*******************************************************')
+    disp('*******************************************************')
+    disp(['l1 inpaint = ',num2str(l1_mapS)])
+    disp(['HPD bound = ',num2str(param_hpd.HPDconstraint)])
+    disp(['l2 data inpaint = ',num2str(l2_mapS)])
+    disp(['data bound = ',num2str(param_data.data_eps)])
+
+    if l1_mapS <= param_hpd.HPDconstraint && l2_mapS <= param_data.data_eps
+        disp('Intersection between S and Calpha nonempty')
+        disp('*******************************************************')
+        result.xS = xmap_S ;
+        result.xC = xmap_S ;
+    else
+        disp('xmap_S OUTSIDE Calpha -> run alternating projections')
+        disp('*******************************************************')
+        disp(' ')
+        result = BUQO_algo(xmap, xmap_S, param_algo, param_data, param_hpd, param_struct) ;
+        sigma4 = 1;
+    end
+
+
+    rho  = norm( result.xC(:) - result.xS(:) ) / ...
+           norm( xmap(:) - xmap_S(:) ) ;
+    disp(' ')
+    disp('*****************************************')
+    disp(['       rho = ',num2str(rho)])
+    disp('*****************************************')
+
+
+    l2_bound_params       = strjoin([param_struct.tol_smooth,"tol_smooth",param_struct.l2_mean,"l2mean",param_struct.l2_bound,"l2bound",sigma4,"sigma4"],"_");
+    l2_bound_params_fig   = strjoin([param_struct.tol_smooth,"tol_smooth",param_struct.l2_mean,"l2mean",param_struct.l2_bound,"l2bound",sigma4,"sigma4"],"-");
+    linf_bound_params = strjoin([param_struct.linf_bound_max,"linfMax",param_struct.linf_bound_min,"linfMin",sigma4,"sigma4"],"_");
+    linf_bound_params_fig = strjoin([param_struct.linf_bound_max,"linfMax",param_struct.linf_bound_min,"linfMin",sigma4,"sigma4"],"-");
+    if inpainting
+        l2_bound_params      = strjoin([param_struct.Size_Gauss_kern,"kernel",l2_bound_params],"_");
+        l2_bound_params_fig  = strjoin([param_struct.Size_Gauss_kern,"kernel",l2_bound_params_fig],"-")
+        linf_bound_params      = strjoin([param_struct.Size_Gauss_kern,"kernel",linf_bound_params],"_");
+        linf_bound_params_fig  = strjoin([param_struct.Size_Gauss_kern,"kernel",linf_bound_params_fig],"-")
+    end
+
+    if norm_name == "Linf"
+        fig_name     = strjoin([name,"BUQO_problem_results",linf_bound_params,forward_param_names,"fig"],["_","_","_","."]);
+        png_fig_name = strjoin([name,"BUQO_problem_results",linf_bound_params,forward_param_names,"png"],["_","_","_","."]);
+        sup_title    = strjoin([inpainting_ext,linf_bound_params_fig],"-");
+    else
+        fig_name     = strjoin([name,"BUQO_problem_results",l2_bound_params,forward_param_names,"fig"],["_","_","_","."]);
+        png_fig_name = strjoin([name,"BUQO_problem_results",l2_bound_params,forward_param_names,"png"],["_","_","_","."]);
+        sup_title    = strjoin([inpainting_ext,l2_bound_params_fig],"-");
+    end
+
+    fig_path     = strjoin([target_folder,fig_name],"/");
+    png_fig_path = strjoin([target_folder,'png',png_fig_name],"/");
+
+
+    fig =figure, 
+    pause(0.00001);
+    frame_h = get(handle(gcf),'JavaFrame');
+    set(frame_h,'Maximized',1)
+    subplot 221, imagesc(xmap), axis image; colormap gray; colorbar, xlabel('xmap'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
+    subplot 222, imagesc(xmap_S), axis image; colormap gray; colorbar, xlabel('xmap - no struct'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
+    subplot 223, imagesc(result.xC), axis image; colormap gray; colorbar, xlabel('xC'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
+    subplot 224, imagesc(result.xS), axis image; colormap gray; colorbar, xlabel('xS'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
+
+    sgtitle(sup_title)
+    disp(['saving everything as',strjoin([name,"BUQO_problem_results",l2_bound_params,forward_param_names],'_')]);
+
+    saveas(fig,fig_path)
+
+
+    saveas(fig,png_fig_path)
+
+
+    L = param_struct.L;
+    Mask = param_struct.Mask;
+
+
+    lambda_t = param_hpd.lambda_t;
+
+    hpd_constraint = param_hpd.HPDconstraint;
+    epsilon        = param_data.data_eps;
+    theta          = param_struct.l2_bound;
+    tau            = param_struct.tol_smooth;
+
+    phi_imtrue     = param_data.Phi(im_true);
+    phit_imtrue    = param_data.Phit(phi_imtrue);
+    psi_imtrue     = param_map.Psit(im_true);
+    psit_imtrue     = param_map.Psi(psi_imtrue);
+    x_c            = result.xC;
+    x_s            = result.xS;
+    % Mop_imtrue     = param_struct.Mop*im_true(:);
+    % Mopt =@(v) reshape(param_struct.Mop'*v, param_data.Ny, param_data.Nx);
+    % Mopt_imtrue     = Mopt(Mop_imtrue(:));
+    % Lbar_imtrue    = param_struct.Mbarop*im_true(:);
+    % Mbaropt =@(v) reshape(param_struct.Mbarop'*v, param_data.Ny, param_data.Nx) ;
+    % Lbart_imtrue = Mbaropt(Lbar_imtrue);
+    % fft_imtrue   = TF(im_true,numel(im_true));
+    struct_mask   = param_struct.Mask;
+
+    time_tot = result.time;
+
+    dist2 = result.dist2  ;
+    l2data = result.l2data ;
+    l1reg = result.l1reg   ;
+
+
+
+    if inpainting
+        smooth_max = result.smooth_max ;%traceplot of how the diff between the masked aread and the inpainted version is evolving
+    end
+
+
+
+
+    if norm_name == "Linf"
+        linfsmooth_min = result.linfsmooth_min ; %traceplot of how the max of gradxs is evolving
+        linfsmooth_max = result.linfsmooth_max;  %traceplot of how the min of gradxs is evolving
+        fig_name     = strjoin([name,"BUQO_problem_convergence",linf_bound_params,forward_param_names,"fig"],["_","_","_","."]);
+        results_name = strjoin([name,"BUQO_problem_results",linf_bound_params,forward_param_names,"mat"],["_","_","_","."]);
+    else
+        l2smooth = result.l2smooth ;%traceplot of how the norm of gradxs is evolving
+        fig_name     = strjoin([name,"BUQO_problem_convergence",l2_bound_params,forward_param_names,"fig"],["_","_","_","."]);
+        results_name = strjoin([name,"BUQO_problem_results",l2_bound_params,forward_param_names,"mat"],["_","_","_","."]);
+    end
+
+    results_path        = strjoin([target_folder ,results_name],'/');
+
+
+    fig =figure, 
+    if inpainting && norm_name == "Linf"
+
+        save(results_path,'xmap','hpd_constraint','theta','tau','epsilon','struct_mask','phi_imtrue','x_c','x_s','dist2','l2data','l1reg','linfsmooth_min','linfsmooth_min','rho','smooth_max')
+
+        subplot(321);plot(l1reg), hold on, plot(hpd_constraint*ones(size(l1reg)),'r'),xlabel('it'), ylabel('l1 norm regulariser hpd-psi xc'), 
+        subplot(322);plot(l2data), hold on, plot(epsilon*ones(size(l2data)),'r'), xlabel('it'), ylabel('l2 norm data fit-phi xc')
+        subplot(323);plot(linfsmooth_max,'--','Color',[0.5 0 0.8])
+        hold on
+        plot(linfsmooth_min,'--','Color',[0 0.9 0])
+        hold on
+        plot(param_struct.linf_bound_max*ones(size(linfsmooth_max)),'r')
+        hold on
+        plot(param_struct.linf_bound_min*ones(size(linfsmooth_min)),'b')
+        xlabel('it'), ylabel(strjoin([norm_name,' grad Mxs'])), legend('max(grad Mxs)','min(grad Mxs)','upper bound','lower bound')
+        subplot(324);plot(smooth_max), hold on, plot(tau*ones(size(smooth_max)),'r'),  xlabel('it'), ylabel('inpainting energy-Lbar xs')
+        subplot(325);plot(dist2),   xlabel('it'), ylabel('Distance between xc and xs')
+    elseif ~inpainting && norm_name == "Linf"
+        save(results_path,'xmap','hpd_constraint','theta','tau','epsilon','struct_mask','phi_imtrue','x_c','x_s','dist2','l2data','l1reg','linfsmooth_min','linfsmooth_min','rho')
+
+        subplot(221);plot(l1reg), hold on, plot(hpd_constraint*ones(size(l1reg)),'r'),xlabel('it'), ylabel('l1 norm regulariser hpd-psi xc'), 
+        subplot(222);plot(l2data), hold on, plot(epsilon*ones(size(l2data)),'r'), xlabel('it'), ylabel('l2 norm data fit-phi xc')
+        subplot(223);plot(linfsmooth_max,'--','Color',[0.5 0 0.8])
+        hold on
+        plot(linfsmooth_min,'--','Color',[0 0.9 0])
+        hold on
+        plot(param_struct.linf_bound_max*ones(size(linfsmooth_max)),'r')
+        hold on
+        plot(param_struct.linf_bound_min*ones(size(linfsmooth_min)),'b')
+        xlabel('it'), ylabel(strjoin([norm_name,' grad Mxs'])), legend('max(grad Mxs)','min(grad Mxs)','upper bound','lower bound')
+        subplot(224);plot(dist2),   xlabel('it'), ylabel('Distance between xc and xs')
+    elseif inpainting && norm_name~="Linf"
+        save(results_path,'xmap','hpd_constraint','theta','tau','epsilon','struct_mask','phi_imtrue','x_c','x_s','dist2','l2data','l1reg','l2smooth','rho','smooth_max')
+
+
+        subplot(321);plot(l1reg), hold on, plot(hpd_constraint*ones(size(l1reg)),'r'),xlabel('it'), ylabel('l1 norm regulariser hpd-psi xc'), 
+        subplot(322);plot(l2data), hold on, plot(epsilon*ones(size(l2data)),'r'), xlabel('it'), ylabel('l2 norm data fit-phi xc')
+        subplot(323);plot(l2smooth), hold on, plot(theta*ones(size(l2smooth)),'r'),  xlabel('it'), ylabel(strjoin([norm_name,' grad Mxs']))
+        subplot(324);plot(smooth_max), hold on, plot(tau*ones(size(smooth_max)),'r'),  xlabel('it'), ylabel('inpainting energy-Lbar xs')
+        subplot(325);plot(dist2),   xlabel('it'), ylabel('Distance between xc and xs')
+    elseif ~inpainting && norm_name~="Linf"
+        %no inpainting l2, l1
+        save(results_path,'xmap','hpd_constraint','theta','tau','epsilon','struct_mask','phi_imtrue','x_c','x_s','dist2','l2data','l1reg','l2smooth','rho')
+
+        subplot(221);plot(l1reg), hold on, plot(hpd_constraint*ones(size(l1reg)),'r'),xlabel('it'), ylabel('l1 norm regulariser hpd-psi xc'), 
+        subplot(222);plot(l2data), hold on, plot(epsilon*ones(size(l2data)),'r'), xlabel('it'), ylabel('l2 norm data fit-phi xc')
+        subplot(223);plot(l2smooth), hold on, plot(theta*ones(size(l2smooth)),'r'),  xlabel('it'), ylabel(strjoin([norm_name,' Mask energy-Mxs']))
+        subplot(224);plot(dist2),   xlabel('it'), ylabel('Distance between xc and xs') 
+    end
+
+
+
+
+    if norm_name == "Linf"
+        fig_name     = strjoin([name,"BUQO_problem_convergence",linf_bound_params,forward_param_names,"fig"],["_","_","_","."]);
+    else
+        fig_name     = strjoin([name,"BUQO_problem_convergence",l2_bound_params,forward_param_names,"fig"],["_","_","_","."]);
+    end
+    fig_path = strjoin([target_folder,fig_name],"/");
+    sgtitle(sup_title)
+    saveas(fig,fig_path)
+
+
+
 end
-
-
-rho  = norm( result.xC(:) - result.xS(:) ) / ...
-       norm( xmap(:) - xmap_S(:) ) ;
-disp(' ')
-disp('*****************************************')
-disp(['       rho = ',num2str(rho)])
-disp('*****************************************')
-
-fig =figure, 
-pause(0.00001);
-frame_h = get(handle(gcf),'JavaFrame');
-set(frame_h,'Maximized',1)
-subplot 221, imagesc(xmap), axis image; colormap gray; colorbar, xlabel('xmap'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
-subplot 222, imagesc(xmap_S), axis image; colormap gray; colorbar, xlabel('xmap - no struct'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
-subplot 223, imagesc(result.xC), axis image; colormap gray; colorbar, xlabel('xC'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
-subplot 224, imagesc(result.xS), axis image; colormap gray; colorbar, xlabel('xS'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
-l2_bound_params = strjoin([param_struct.Size_Gauss_kern,"kernel",param_struct.tol_smooth,"tol_smooth",param_struct.l2_mean,"l2mean",param_struct.l2_bound,"l2bound",sigma4,"sigma4"],"_");
-l2_bound_params_fig = strjoin([param_struct.Size_Gauss_kern,"kernel",param_struct.tol_smooth,"tol_smooth",param_struct.l2_mean,"l2mean",param_struct.l2_bound,"l2bound",sigma4,"sigma4"],"-");
-sgtitle(strjoin(["with inpainting l-inifinity ",l2_bound_params_fig]))
-disp(['saving everything as',strjoin([name,"BUQO_problem_results",l2_bound_params,forward_param_names],'_')]);
-fig_name        = strjoin([name,"BUQO_problem_results",l2_bound_params,forward_param_names,"fig"],["_","_","_","."]);
-fig_path = strjoin([target_folder,fig_name],"/");
-saveas(fig,fig_path)
-
-png_fig_name = strjoin([name,"BUQO_problem_results",l2_bound_params,forward_param_names,"png"],["_","_","_","."]);
-png_fig_path = strjoin([target_folder,'png',png_fig_name],"/");
-saveas(fig,png_fig_path)
-
-
-L = param_struct.L;
-Mask = param_struct.Mask;
-
-
-lambda_t = param_hpd.lambda_t;
-
-hpd_constraint = param_hpd.HPDconstraint;
-epsilon        = param_data.data_eps;
-theta          = param_struct.l2_bound;
-tau            = param_struct.tol_smooth;
-
-phi_imtrue     = param_data.Phi(im_true);
-phit_imtrue    = param_data.Phit(phi_imtrue);
-psi_imtrue     = param_map.Psit(im_true);
-psit_imtrue     = param_map.Psi(psi_imtrue);
-x_c            = result.xC;
-x_s            = result.xS;
-Mop_imtrue     = param_struct.Mop*im_true(:);
-Mopt =@(v) reshape(param_struct.Mop'*v, param_data.Ny, param_data.Nx);
-Mopt_imtrue     = Mopt(Mop_imtrue(:));
-Lbar_imtrue    = param_struct.Mbarop*im_true(:);
-Mbaropt =@(v) reshape(param_struct.Mbarop'*v, param_data.Ny, param_data.Nx) ;
-Lbart_imtrue = Mbaropt(Lbar_imtrue);
-fft_imtrue   = TF(im_true,numel(im_true));
-struct_mask   = param_struct.Mask;
-
-time_tot = result.time;
-
-dist2 = result.dist2  ;
-l2data = result.l2data ;
-l1reg = result.l1reg   ;
-l2smooth = result.l2smooth ;
-smooth_max = result.smooth_max ;
-
-
-
-
-
-
-
-results_name        = strjoin([name,"BUQO_problem_results",l2_bound_params,forward_param_names,"mat"],["_","_","_","."]);
-results_path        = strjoin([target_folder ,results_name],'/');
-save(results_path,'xmap','hpd_constraint','theta','tau','epsilon','struct_mask','phi_imtrue','x_c','x_s','dist2','l2data','l1reg','l2smooth','rho')
-
-
-
-fig =figure, 
-subplot(321);plot(l1reg), hold on, plot(hpd_constraint*ones(size(l1reg)),'r'),xlabel('it'), ylabel('l1 norm regulariser hpd-psi xc'), 
-subplot(322);plot(l2data), hold on, plot(epsilon*ones(size(l2data)),'r'), xlabel('it'), ylabel('l2 norm data fit-phi xc')
-subplot(323);plot(l2smooth), hold on, plot(theta*ones(size(l2smooth)),'r'),  xlabel('it'), ylabel('Mask energy-Mxs')
-subplot(324);plot(smooth_max), hold on, plot(tau*ones(size(smooth_max)),'r'),  xlabel('it'), ylabel('inpainting energy-Lbar xs')
-subplot(325);plot(dist2),   xlabel('it'), ylabel('Distance between xc and xs')
-
-
-fig_name        = strjoin([name,"BUQO_problem_convergence",l2_bound_params,forward_param_names,"fig"],["_","_","_","."]);
-fig_path = strjoin([target_folder,fig_name],"/");
-sgtitle(strjoin(["with inpainting l-inifinity ",l2_bound_params_fig]))
-saveas(fig,fig_path)
-
-
-
