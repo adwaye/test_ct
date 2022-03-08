@@ -12,6 +12,8 @@ addpath Data/
 addpath Tools/
 addpath(genpath('Tools'))
 
+
+grad_scheme_name= "bw_fw";%"bw_fw"; %choose bw_fw or ''
 norm_name = "L2"; %choose from L1, L2, Linf
 inpainting = false;%
 if inpainting
@@ -21,13 +23,19 @@ else
 end
 
 algo_name = strjoin(["POCS",norm_name,"gradM",inpainting_ext],'_');
+if grad_scheme_name ~= ""
+    grad_op_name = strjoin(["gradient_op",grad_scheme_name],"_");
+else
+    grad_op_name = "gradient_op";
+end
+grad_op   = str2func(grad_op_name);
 BUQO_algo = str2func(algo_name);
 
 
 
 %% 
 source_folder = "Data/ct_scans/ct1";
-folder_name   = strjoin(["ct1_experiment",norm_name,"gradM",inpainting_ext],'_');
+folder_name   = strjoin(["ct1_experiment",norm_name,"gradM",grad_scheme_name,inpainting_ext],'_');
 target_folder = strjoin(["/home/adwaye/matlab_projects/test_CT/Figures",folder_name],'/');
 mkdir(target_folder);
 mkdir(strjoin([target_folder,"png"],'/'))

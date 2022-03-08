@@ -12,19 +12,38 @@ addpath Data/
 addpath Tools/
 addpath(genpath('Tools'))
 
-grad_norm_name = "L1"; %choose from L1, L2, Linf
+grad_norm_name = "L2"; %choose from L1, L2, Linf
 M_norm_name    = "L2"; %choose from L1, L2, Linf
 inpainting = false;%
+use_dil_mask= true;
 
-
+grad_scheme_name = "";%bw_fw or ""
 algo_name = strjoin(["POCS",grad_norm_name,"gradM",M_norm_name,"Mx"],'_');
 BUQO_algo = str2func(algo_name);
+use_full_size = false;
 
 
+source_folder = "Data/ct_scans/ct1";
+if grad_scheme_name ~= ""
+    grad_op_name = strjoin(["gradient_op",grad_scheme_name],"_");
+    folder_name   = strjoin(["ct1_experiment",grad_norm_name,"gradM",grad_scheme_name,M_norm_name,"M"],'_');
+else
+    grad_op_name = "gradient_op";
+    folder_name   = strjoin(["ct1_experiment",grad_norm_name,"gradM",M_norm_name,"M"],'_');
+end
+
+if use_full_size
+    folder_name = strjoin(["full_size",folder_name],'_');
+end
+if use_dil_mask
+    folder_name = strjoin([folder_name,"dil_mask"],'_');
+end
+grad_op   = str2func(grad_op_name);
+BUQO_algo = str2func(algo_name);
 
 %% 
-source_folder = "Data/ct_scans/ct1";
-folder_name   = strjoin(["ct1_experiment",grad_norm_name,"gradM",M_norm_name,"M"],'_');
+
+
 target_folder = strjoin(["/home/adwaye/matlab_projects/test_CT/Figures",folder_name],'/');
 mkdir(target_folder);
 mkdir(strjoin([target_folder,"png"],'/'))
@@ -50,28 +69,38 @@ im_true = double(matfile.CT);
 normA   = im_true-min(im_true(:));
 normA   = normA./max(normA(:));
 im_true = normA;
-im_true = imresize(im_true,0.5,'Method','bilinear');
-pad_up   = fix((512-size(im_true,1))/2);
-pad_side = fix((512-size(im_true,2))/2);
+mask    = matfile.labels;
+if ~use_full_size
+    im_true = imresize(im_true,0.5,'Method','bilinear');
+    mask = imresize(mask,0.5,'bilinear');
+end
+max_size = 2*max(size(im_true));
+pad_up   = fix((max_size-size(im_true,1))/2);
+pad_side = fix((max_size-size(im_true,2))/2);
 im_true = padarray(im_true,[pad_up pad_side],0,'both');
-if size(im_true,1) ~= 512
+if size(im_true,1) ~= max_size
     im_true = padarray(im_true,[1 0],0,'post');
 end
-if size(im_true,2) ~= 512
+if size(im_true,2) ~= max_size
     im_true = padarray(im_true,[0 1],0,'post');
 end
 
-mask = matfile.labels;
-mask = imresize(mask,0.5,'bilinear');
+
+
 mask = double(mask>0);
 mask = padarray(mask,[pad_up pad_side],0,'both');
-if size(mask,1) ~= 512
+if size(mask,1) ~= max_size
     mask = padarray(mask,[1 0],0,'post');
 end
-if size(mask,2) ~= 512
+if size(mask,2) ~= max_size
     mask= padarray(mask,[0 1],0,'post');
 end
-
+% mask = imdilate(mask,strel('disk',2));
+if use_dil_mask
+    mask(262:263,263)=1;
+    mask(260:262,264:266)=1;
+    mask(259,266:271)=1;
+end
 
 seed = 0 ;
 SNR =@(x) 20 * log10(norm(im_true(:))/norm(im_true(:)-x(:)));
@@ -116,10 +145,12 @@ param_data.M       = size(param_data.Phi(im_true)) ;
 one_sinogram  = ones(size(phi(im_true)));
 geom_shape    = phit(one_sinogram);
 
+% mask_copy = mask;
 
 figure(1), 
-subplot 131, imagesc(im_true), axis image, colormap gray, colorbar, title("Ground Truth")
-subplot 132, imagesc(mask), axis image, colormap gray, colorbar, title("pe locations")
+subplot 131, imagesc(im_true), axis image, colormap gray, colorbar, title("Ground Truth")%,ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
+subplot 132, imagesc(mask), axis image, colormap gray, colorbar, title("pe locations")%,ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
+% subplot 133, imagesc((1-mask_copy).*im_true), axis image, colormap gray, colorbar, title("Masked area"),ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
 subplot 133, imagesc(geom_shape), axis image, colormap gray, colorbar, title("Adjoint applied applied to one sinogram")
 
 
@@ -301,15 +332,24 @@ imagesc((1-texture_mask).*xmap),axis image; colorbar, colormap gray, xlabel('sam
 sampled_gradients = [fx(texture_mask>0),fy(texture_mask>0)];
 
 mean_values_grad  = [0,0,0,0];
-bound_values_grad = [0.01,0.01,0.01,0.01];
+% bound_values_grad = [max([quantile(sampled_gradients(:),1.0)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.0)]),...
+%                     max([quantile(sampled_gradients(:),0.9)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.1)]),...
+%                     max([quantile(sampled_gradients(:),0.8)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.2)]),...
+%                     max([quantile(sampled_gradients(:),0.6)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.4)])];
+bound_values_grad = [0.001,0.001,0.001,0.001];
 
 sampled_pixels = xmap(texture_mask>0);
 
 mean_values_M  = [median(sampled_pixels(:)),median(sampled_pixels(:)),median(sampled_pixels(:)),median(sampled_pixels(:))];
+% bound_values_M = [0.005,...
+%                   0.005,...
+%                   0.005,...
+%                   0.005];
 bound_values_M = [std(sampled_pixels(:)),...
-                  quantile(sampled_pixels(:),0.9)-quantile(sampled_pixels(:),0.1),...
-                  quantile(sampled_pixels(:),0.8)-quantile(sampled_pixels(:),0.2),...
-                  quantile(sampled_pixels(:),0.6)-quantile(sampled_pixels(:),0.4)];
+                  max([quantile(sampled_pixels(:),1.0)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.0)]),...
+                  max([quantile(sampled_pixels(:),0.8)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.2)]),...
+                  max([quantile(sampled_pixels(:),0.6)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.4)])
+                  ];
 
 figure();
 histogram(sampled_gradients);
@@ -331,7 +371,7 @@ for n = 1:numel(param_struct.Mask)
 end
 
 disp('-------------------------------------------')
-[Gradop, Gradopt] = gradient_op(rand(size(im_true)),mask) ;
+[Gradop, Gradopt] = grad_op(rand(size(im_true)),mask) ;
 disp("Testing if the gradient forward op and the divergence are true adjoints")
 disp(["Test object has size =",num2str(size(im_true))])
 disp(["artefact has area =",num2str(sum(mask(:)))])
@@ -535,3 +575,8 @@ for bound_num = 1:max_l
 
 
 end
+
+
+
+% mask_dil = imdilate(mask,strel('disk',2));
+% figure();imagesc(mask_dil-mask)
