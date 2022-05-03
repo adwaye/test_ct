@@ -1,8 +1,8 @@
-function results = POCS_L2_gradM_L2_Mx(xmap, param_algo, param_data, param_hpd, param_struct,sigma4)
+function results = Project_to_S(xmap, param_algo, param_data,  param_struct)
 
 
 %% Operateurs
-if ~isfield(param_struct, 'back'), param_struct.back = zeros(size(xmap_inp)) ; end;
+% if ~isfield(param_struct, 'back'), param_struct.back = zeros(size(xmap_inp)) ; end;
 if ~isfield(param_algo, 'display'), param_algo.display = 100 ; end;
 
 
@@ -25,7 +25,7 @@ Mask_opt =@(v) reshape(param_struct.Mask_op'*v, param_data.Ny, param_data.Nx) ;
 tau = 0.9 * 2*sqrt(2);
 
 %% INITIALISATION
-xS = xmap ;
+xS = 0 * xmap ;
 u = 0 * Mask_op(xS) ;
 v = 0 * Gradop(xS) ;
 
@@ -67,6 +67,10 @@ for it = 1:param_algo.NbIt
     
     %condition on Mbar
     
+    xS = xmap - 0.5*tau*(Mask_opt(u)*Gradopt(v));
+    xS = max(xS,0) ;
+%     xS(xS<0) = 0 ;
+    
     u_ = u  - tau*MxS;
     u  = u_ - tau * proj_l2ball( tau^(-1) * u_, param_struct.l2_bound_pix, param_struct.l2_mean_pix ) ;
     
@@ -76,8 +80,7 @@ for it = 1:param_algo.NbIt
     v  = v_ - tau * proj_l2ball( tau^(-1) * v_, param_struct.l2_bound_grad, param_struct.l2_mean_grad ) ;
     
     %making xS
-    xS = xmap - 0.5*tau*(Mask_opt(u)*Gradopt(v));
-    xS = max(xS,0) ;
+
     
     
     MGradxS = Gradop(xS) ;
@@ -94,12 +97,12 @@ for it = 1:param_algo.NbIt
     if mod(it, param_algo.display) == 0
         disp(' ')
         disp('*********************************************')
-        disp(['d(xmap, xS)                 = ',num2str(dist2(1))])
+        disp(['d(xmap, xS)                 = ',num2str(dist2(it+1))])
         disp('---------------------------------------------')
-        disp(['|| MxS-mean_px ||_2                = ',num2str(mask_energy(1))])
+        disp(['|| MxS-mean_px ||_2                = ',num2str(mask_energy(it+1))])
         disp(['      vs. upper bound    = ',num2str(param_struct.l2_bound_pix)])
         disp('---------------------------------------------')
-        disp(['|| grad (MxS)-mean_grad ||_2                = ',num2str(grad_energy(1))])
+        disp(['|| grad (MxS)-mean_grad ||_2                = ',num2str(grad_energy(it+1))])
         disp(['      vs. upper bound    = ',num2str(param_struct.l2_bound_grad)])
         disp('*********************************************')
         

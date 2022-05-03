@@ -16,7 +16,7 @@ grad_norm_name = "L2"; %choose from L1, L2, Linf
 M_norm_name    = "L2"; %choose from L1, L2, Linf
 inpainting = false;%
 use_dil_mask= false;
-plot_all = false;
+plot_all = true;
 
 grad_scheme_name = "";%bw_fw or ""
 algo_name = strjoin(["POCS",grad_norm_name,"gradM",M_norm_name,"Mx"],'_');
@@ -54,7 +54,7 @@ filenames = dir(query);
 nfiles    = size(filenames,1);
 
 % tempname = "curated2_pe_zslice_189.mat";%$change this to process a different slice
-% tempname = "curated2_pe_xslice_225.mat";
+%tempname = "curated2_pe_xslice_225.mat";
 tempname = "curated2_pe_yslice_266.mat";
 [filepath,fname,ext] = fileparts(tempname);
 
@@ -132,14 +132,8 @@ index_setup = 1;
 
 geom.n_angles   = angle_setup(index_setup);%900;
 geom.ndetectors = detector_setup(index_setup);%900;
-
 vol_geom = astra_create_vol_geom(param_data.Nx,param_data.Ny);
-%create a parallel projection geometry with spacing =1 pixel, 384 
-
-
 geom.spacing    = view_size/geom.ndetectors;%1/sqrt(2);% 1/(nx*ny);
-
-
 geom.angles     = linspace2(0,pi,geom.n_angles);%use more angles
 proj_geom       = astra_create_proj_geom('parallel', geom.spacing, geom.ndetectors, geom.angles);
 geom.proj       = proj_geom;
@@ -149,17 +143,12 @@ W = opTomo('cuda',proj_geom,vol_geom);
 W_scaled = W/W.normest;
 
 %num_angles = floor(1e-3*param_data.N) ;
-
-
-
-
-phi = @(x) reshape(W_scaled*x(:),W.proj_size);
-
-phit = @(v) reshape(W_scaled'*v(:),size(im_true)); 
+phi      = @(x) reshape(W_scaled*x(:),W.proj_size);
+phit     = @(v) reshape(W_scaled'*v(:),size(im_true)); 
 norm_phi = op_norm(phi, phit, [param_data.Ny, param_data.Nx], 1e-4, 200, 0);  
 Wscaled  = W/W.normest;
-param_data.Phi  =phi;
-param_data.Phit =phit;
+param_data.Phi  = phi;
+param_data.Phit = phit;
 
 param_data.normPhi = Wscaled.normest;%op_norm(param_data.Phi, param_data.Phit, [param_data.Ny, param_data.Nx], 1e-4, 200, 0);    
 param_data.M       = size(param_data.Phi(im_true)) ;
@@ -258,24 +247,6 @@ end
 
 
 %%
-
-param_hpd.lambda_t = param_data.N / sum(abs(param_map.Psit(xmap))) ;
-
-
-alpha = alpha_array(alpha_index);
-talpha = sqrt( (16*log(3/alpha)) / param_data.N );
-HPDconstraint = param_hpd.lambda_t* sum(abs(param_map.Psit(xmap))) ...
-                + param_data.N*(1+talpha);
-param_hpd.HPDconstraint = HPDconstraint/param_hpd.lambda_t ;
-
-
-param_hpd.Psit = param_map.Psit ;
-param_hpd.Psi = param_map.Psi ;
-param_hpd.normPsi = param_map.normPsi ;
-param_hpd.lambda = param_map.lambda ;
-
-
-
 mask_struct = mask;
 [row_mask col_mask] = find(mask);
 max_y = max(col_mask,[],'all');
@@ -295,7 +266,7 @@ subplot 223, imagesc(im_true),colorbar(),title("ground truth"), axis image, colo
 subplot 224, imagesc(xmap),colorbar(),title("map estimate"), axis image, colormap gray
 fig_name = strjoin([name,"fwd_res",forward_param_names,"fig"],["_","_","."]);
 fig_path = strjoin([target_folder,fig_name],"/");
-saveas(fig,fig_path)
+
 close(fig)
 
 
@@ -322,7 +293,7 @@ else
     texture_mask = imresize(texture_mask,0.5,'Method','nearest');
     texture_mask= padarray(texture_mask,[pad_up pad_side],0,'both');
     if size(texture_mask,1) ~= max_size
-        texture_mask = padarray(texture_mask,[1 0],0,'post')
+        texture_mask = padarray(texture_mask,[1 0],0,'post');
     end
     if size(texture_mask,2) ~= max_size
         texture_mask = padarray(texture_mask,[0 1],0,'post');
@@ -335,6 +306,8 @@ sampled_gradients = [fx(texture_mask>0),fy(texture_mask>0)];
 
 mean_values_grad  = [0,0,0,0,0];
 quantiles    = [0.6,0.7,0.9];
+
+bound_num = 1;
 
 sampled_pixels = xmap(texture_mask>0);
 
@@ -350,6 +323,25 @@ grad_quantile = quantiles(bound_num);
 param_struct.l2_bound_grad= max([quantile(sampled_gradients(:),grad_quantile)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),1-grad_quantile)]);
 
 
+[Gradop, Gradopt] = grad_op(rand(size(im_true)),mask) ;
+
+Mask_op = sparse(sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
+Mask_op_comp = sparse(numel(param_struct.Mask)-sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
+i = 1; ic = 1;
+for n = 1:numel(param_struct.Mask)
+    if(param_struct.Mask(n))==0
+        Mask_op_comp(ic,n) = 1 ;
+        ic = ic+1 ;
+    else
+        Mask_op(i,n) = 1;
+        i = i+1 ;
+    end
+end
+
+
+param_struct.Gradop = Gradop ;
+param_struct.Gradopt = Gradopt;
+param_struct.Mask_op = Mask_op;
 
 param_algo.NbIt = 10000 ;
 param_algo.stop_dist = 1e-4 ;
@@ -359,6 +351,7 @@ param_algo.stop_err_smooth = 1e-4 ;
 
 
 proj_S = Project_to_S(xmap, param_algo, param_data,  param_struct);
+
 
 
 

@@ -400,7 +400,7 @@ for noise_index=1:n_noise
                 histogram(sampled_gradients);
 
             end
-            max_l = size(quantiles,2);2
+            max_l = size(quantiles,2);
 
             Mask_op = sparse(sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
             Mask_op_comp = sparse(numel(param_struct.Mask)-sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
