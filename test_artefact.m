@@ -15,7 +15,8 @@ addpath(genpath('Tools'))
 grad_norm_name = "L2"; %choose from L1, L2, Linf
 M_norm_name    = "L2"; %choose from L1, L2, Linf
 inpainting = false;%
-use_dil_mask= true;
+use_dil_mask= false;
+plot_all = false;
 
 grad_scheme_name = "";%bw_fw or ""
 algo_name = strjoin(["POCS",grad_norm_name,"gradM",M_norm_name,"Mx"],'_');
@@ -26,10 +27,10 @@ use_full_size = false;
 source_folder = "Data/ct_scans/ct1";
 if grad_scheme_name ~= ""
     grad_op_name = strjoin(["gradient_op",grad_scheme_name],"_");
-    folder_name   = strjoin(["ct1_experiment",grad_norm_name,"gradM",grad_scheme_name,M_norm_name,"M"],'_');
+    folder_name   = strjoin(["artefact_experiment",grad_norm_name,"gradM",grad_scheme_name,M_norm_name,"M"],'_');
 else
     grad_op_name = "gradient_op";
-    folder_name   = strjoin(["ct1_experiment",grad_norm_name,"gradM",M_norm_name,"M"],'_');
+    folder_name   = strjoin(["artefact_experiment",grad_norm_name,"gradM",M_norm_name,"M"],'_');
 end
 
 if use_full_size
@@ -54,6 +55,7 @@ nfiles    = size(filenames,1);
 
 % tempname = "curated2_pe_zslice_189.mat";%$change this to process a different slice
 tempname = "curated2_pe_xslice_225.mat";
+% tempname = "curated2_pe_yslice_266.mat";
 [filepath,fname,ext] = fileparts(tempname);
 
 
@@ -69,10 +71,10 @@ im_true = double(matfile.CT);
 normA   = im_true-min(im_true(:));
 normA   = normA./max(normA(:));
 im_true = normA;
-mask    = matfile.labels;
+% mask    = matfile.labels;
 if ~use_full_size
     im_true = imresize(im_true,0.5,'Method','bilinear');
-    mask = imresize(mask,0.5,'bilinear');
+%     mask = imresize(mask,0.5,'bilinear');
 end
 view_size = 1.05*sqrt(size(im_true,1)^2+size(im_true,2)^2);
 max_size = 350;%2*max(size(im_true));
@@ -88,23 +90,37 @@ end
 
 
 
-mask = double(mask>0);
-mask = padarray(mask,[pad_up pad_side],0,'both');
-if size(mask,1) ~= max_size
-    mask = padarray(mask,[1 0],0,'post');
+% mask = double(mask>0);
+% mask = padarray(mask,[pad_up pad_side],0,'both');
+% if size(mask,1) ~= max_size
+%     mask = padarray(mask,[1 0],0,'post');
+% end
+% if size(mask,2) ~= max_size
+%     mask= padarray(mask,[0 1],0,'post');
+% end
+% % mask = imdilate(mask,strel('disk',2));
+% if use_dil_mask
+%     mask(182:184,181)=1;
+%     mask(181:182,182)=1;
+%     mask(180,183)=1;
+%     mask(179,184)=1;
+%     mask(178,185:189)=1;
+%     
+% end
+
+mask = zeros(size(im_true));
+if tempname=="curated2_pe_xslice_225.mat"
+    mask(152:162,182)=1;
+    mask(161:162,182:184)=1;
 end
-if size(mask,2) ~= max_size
-    mask= padarray(mask,[0 1],0,'post');
+if tempname=="curated2_pe_yslice_266.mat" 
+    %     mask(183:190,210)=1;
+    mask(183:190,210)=1;
+%     mask(183,210:223)=1;
+    mask(183,210:213)=1;
+
 end
-% mask = imdilate(mask,strel('disk',2));
-if use_dil_mask
-    mask(182:184,181)=1;
-    mask(181:182,182)=1;
-    mask(180,183)=1;
-    mask(179,184)=1;
-    mask(178,185:189)=1;
-    
-end
+   
 
 seed = 0 ;
 SNR =@(x) 20 * log10(norm(im_true(:))/norm(im_true(:)-x(:)));
@@ -116,12 +132,25 @@ param_data.N = numel(im_true) ;
 param_data.Nx = size(im_true,1);
 param_data.Ny = size(im_true,2);
 
+
+detector_setup = [450,450,450,450];
+angle_setup    = [450,300,200,100];
+noise_array    = [0.00005,0.0002,0.0003,0.001];
+alpha_array  = [0.01];
+n_setup = size(angle_setup,2);
+n_alpha = max(size(alpha_array));
+n_noise = max(size(noise_array));
+
+geom.n_angles   = 200;%900;
+geom.ndetectors = 450;%900;
+
 vol_geom = astra_create_vol_geom(param_data.Nx,param_data.Ny);
 %create a parallel projection geometry with spacing =1 pixel, 384 
 
-geom.ndetectors = 900;
+
 geom.spacing    = view_size/geom.ndetectors;%1/sqrt(2);% 1/(nx*ny);
-geom.n_angles   = 900;
+
+
 geom.angles     = linspace2(0,pi,geom.n_angles);%use more angles
 proj_geom       = astra_create_proj_geom('parallel', geom.spacing, geom.ndetectors, geom.angles);
 geom.proj       = proj_geom;
@@ -151,16 +180,16 @@ one_sinogram  = ones(size(phi(im_true)));
 geom_shape    = phit(one_sinogram);
 
 % mask_copy = mask;
+if plot_all
+    figure(1), 
+    subplot 131, imagesc(im_true), axis image, colormap gray, colorbar, title("Ground Truth")%,ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
+    subplot 132, imagesc(mask), axis image, colormap gray, colorbar, title("pe locations")%,ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
+    % subplot 133, imagesc((1-mask_copy).*im_true), axis image, colormap gray, colorbar, title("Masked area"),ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
+    subplot 133, imagesc(geom_shape), axis image, colormap gray, colorbar, title("Adjoint applied applied to one sinogram")
 
-figure(1), 
-subplot 131, imagesc(im_true), axis image, colormap gray, colorbar, title("Ground Truth")%,ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
-subplot 132, imagesc(mask), axis image, colormap gray, colorbar, title("pe locations")%,ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
-% subplot 133, imagesc((1-mask_copy).*im_true), axis image, colormap gray, colorbar, title("Masked area"),ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
-subplot 133, imagesc(geom_shape), axis image, colormap gray, colorbar, title("Adjoint applied applied to one sinogram")
 
-
-imshow(geom_shape,[]);colorbar();title("");
-
+    imshow(geom_shape,[]);colorbar();title("");
+end
 % -------------------------------------------------
 % test adjoint operator
 xtmp  = rand(param_data.Ny,param_data.Nx) ;
@@ -176,7 +205,7 @@ disp(['diff = ', num2str(norm(fwd-bwd)/norm(fwd))])
 % -------------------------------------------------
 
 %%
-param_data.sig_noise = 1e-4 ;
+param_data.sig_noise = 0.0002;
 param_data.y0 = param_data.Phi(im_true) ;
 rng(seed);
 noise = (randn(param_data.M) ) * param_data.sig_noise/sqrt(2) ; %use gaussian for starters should be poisson as poisson is more accurate
@@ -186,10 +215,12 @@ param_data.data_eps = sqrt(2*prod(param_data.M) + 2* sqrt(4*prod(param_data.M)))
 
 % FBP estimate
 im_fbp = param_data.Phit(param_data.y) ;
-figure, 
-subplot 131, imagesc(im_true), axis image, colormap gray, colorbar
+if plot_all
+    figure, 
+    subplot 131, imagesc(im_true), axis image, colormap gray, colorbar
 %subplot 132, imagesc(param_data.Mask), axis image, colormap gray, colorbar
-subplot 133, imagesc(im_fbp), axis image, colormap gray, colorbar, xlabel(['FBP - SNR ', num2str(SNR(im_fbp))])
+    subplot 133, imagesc(im_fbp), axis image, colormap gray, colorbar, xlabel(['FBP - SNR ', num2str(SNR(im_fbp))])
+end
 
 %%
 
@@ -227,22 +258,25 @@ xmap = double(xmap);
 
 
 
+if plot_all
+    fig = figure, 
+    subplot 221, imagesc(im_true), axis image, colormap gray, colorbar, xlabel('true')
+    subplot 222, imagesc(mask), axis image, colormap gray, colorbar, xlabel('mask')
+    subplot 223, imagesc(im_fbp), axis image, colormap gray, colorbar, xlabel(['FBP - SNR ', num2str(SNR(im_fbp))])
+    subplot 224, imagesc(xmap), axis image, colormap gray, colorbar, xlabel(['xmap - SNR ', num2str(snr_it(end))])
+end
 
-fig = figure, 
-subplot 221, imagesc(im_true), axis image, colormap gray, colorbar, xlabel('true')
-subplot 222, imagesc(mask), axis image, colormap gray, colorbar, xlabel('mask')
-subplot 223, imagesc(im_fbp), axis image, colormap gray, colorbar, xlabel(['FBP - SNR ', num2str(SNR(im_fbp))])
-subplot 224, imagesc(xmap), axis image, colormap gray, colorbar, xlabel(['xmap - SNR ', num2str(snr_it(end))])
-
-
-
+fig = figure,
+subplot 131, imagesc(im_true), axis image, colormap gray, colorbar, xlabel(['FBP - SNR ', num2str(SNR(im_fbp))])
+subplot 132, imagesc(xmap), axis image, colormap gray, colorbar, xlabel(['xmap - SNR ', num2str(snr_it(end))])
+subplot 133, imagesc(xmap.*(1-mask)), axis image, colormap gray, colorbar, xlabel(['xmap - SNR ', num2str(snr_it(end))])
 
 %%
 
 param_hpd.lambda_t = param_data.N / sum(abs(param_map.Psit(xmap))) ;
 
 
-alpha = 1e-2 ; 
+alpha = 0.01;
 talpha = sqrt( (16*log(3/alpha)) / param_data.N );
 HPDconstraint = param_hpd.lambda_t* sum(abs(param_map.Psit(xmap))) ...
                 + param_data.N*(1+talpha);
@@ -276,6 +310,7 @@ subplot 224, imagesc(xmap),colorbar(),title("map estimate"), axis image, colorma
 fig_name = strjoin([name,"fwd_res",forward_param_names,"fig"],["_","_","."]);
 fig_path = strjoin([target_folder,fig_name],"/");
 saveas(fig,fig_path)
+close(fig)
 
 
 %imwrite(im_true,'figures/g_truth')
@@ -307,48 +342,45 @@ param_struct.normLi = op_norm(param_struct.Lit, param_struct.Li, [numel(param_st
 
 xmap_S = xmap ;
 xmap_S(param_struct.Mask>0) = param_struct.L*xmap(param_struct.Mask==0) ;
-fig=figure, 
-subplot 221, imagesc(tmp), axis image; colorbar, colormap gray, xlabel('map without struct')
-subplot 222, imagesc(xmap_S), axis image ; colorbar, colormap gray, xlabel('smoothed struct')
-subplot 223, imagesc(im_true), axis image; colorbar, colormap gray, xlabel('true')
-subplot 224, imagesc(xmap), axis image; colorbar, colormap gray, xlabel('map')
-
+if plot_all
+    fig=figure, 
+    subplot 221, imagesc(tmp), axis image; colorbar, colormap gray, xlabel('map without struct')
+    subplot 222, imagesc(xmap_S), axis image ; colorbar, colormap gray, xlabel('smoothed struct')
+    subplot 223, imagesc(im_true), axis image; colorbar, colormap gray, xlabel('true')
+    subplot 224, imagesc(xmap), axis image; colorbar, colormap gray, xlabel('map')
+end
 %param_struct.l2_mean = 0 ;
-if strcmp(tempname,'curated2_pe_zslice_189.mat')
-    texture_mask                  = zeros(size(xmap));
-    texture_mask(255:262,250:256) = 1;
-    texture_mask(260:275,228:244) = 1;
-else
-    texture_mask = matfile.texture_mask;
-    texture_mask = imresize(texture_mask,0.5,'Method','nearest');
-    texture_mask= padarray(texture_mask,[pad_up pad_side],0,'both');
-    if size(texture_mask,1) ~= max_size
-        texture_mask = padarray(texture_mask,[1 0],0,'post')
-    end
-    if size(texture_mask,2) ~= max_size
-        texture_mask = padarray(texture_mask,[0 1],0,'post');
-    end
+texture_mask                  = zeros(size(xmap));
+if strcmp(tempname,'curated2_pe_xslice_225.mat')    
+    texture_mask(150:160,185:200) = 1;
+    
+end
+if strcmp(tempname,'curated2_pe_yslice_266.mat')
+    texture_mask(183:190,211:216) = 1;
 end
 
-figure(132)
-imagesc((1-texture_mask).*xmap),axis image; colorbar, colormap gray, xlabel('sampled intensities for masked values')
+if plot_all
+    figure(132)
+    imagesc((1-texture_mask).*xmap),axis image; colorbar, colormap gray, xlabel('sampled intensities for masked values')
+end
 
 [fx, fy] = gradient(xmap);
 sampled_gradients = [fx(texture_mask>0),fy(texture_mask>0)];
 
 mean_values_grad  = [0,0,0,0,0];
+quantiles    = [0.6,0.7,0.9];
 % bound_values_grad = [max([quantile(sampled_gradients(:),0.65)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.35)]),...
 %                      max([quantile(sampled_gradients(:),0.6)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.4)]),...
 %                      max([quantile(sampled_gradients(:),0.8)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.2)]),...
 %                      max([quantile(sampled_gradients(:),0.9)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.1)]),...
 %                      max([quantile(sampled_gradients(:),1.0)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.0)])];
-bound_values_grad = [...
-                     max([quantile(sampled_gradients(:),0.6)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.4)]),...
-                     max([quantile(sampled_gradients(:),0.8)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.2)]),...
-                     max([quantile(sampled_gradients(:),0.9)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.1)]),...
-                     max([quantile(sampled_gradients(:),1.0)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.0)]),...
-                     max([quantile(sampled_gradients(:),0.65)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.35)]),
-                     ];
+% bound_values_grad = [...
+%                      max([quantile(sampled_gradients(:),0.6)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.4)]),...
+%                      max([quantile(sampled_gradients(:),0.8)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.2)]),...
+%                      max([quantile(sampled_gradients(:),0.9)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.1)]),...
+%                      max([quantile(sampled_gradients(:),1.0)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.0)]),...
+%                      max([quantile(sampled_gradients(:),0.65)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.35)]),
+%                      ];
 % bound_values_grad = [0.1,0.1,0.1,0.1];
 
 sampled_pixels = xmap(texture_mask>0);
@@ -359,23 +391,24 @@ mean_values_M  = [median(sampled_pixels(:)),median(sampled_pixels(:)),median(sam
 %                   0.005,...
 %                   0.005,...
 %                   0.005];
-bound_values_M = [max([quantile(sampled_pixels(:),1.0)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.0)]),...
-                  max([quantile(sampled_pixels(:),0.9)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.1)]),...
-                  max([quantile(sampled_pixels(:),0.8)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.2)]),...
-                  max([quantile(sampled_pixels(:),0.6)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.4)]),...
-                  max([quantile(sampled_pixels(:),0.65)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.35)])
-                  ]
+% bound_values_M = [max([quantile(sampled_pixels(:),1.0)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.0)]),...
+%                   max([quantile(sampled_pixels(:),0.9)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.1)]),...
+%                   max([quantile(sampled_pixels(:),0.8)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.2)]),...
+%                   max([quantile(sampled_pixels(:),0.6)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.4)]),...
+%                   max([quantile(sampled_pixels(:),0.65)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.35)])
+%                   ]
 % bound_values_M = [0.17773,...
 %                   0.17773,  ...
 %                   0.2,...
 %                   0.3
 %                   ]
-              
-figure();
-histogram(sampled_gradients);
-max_l = size(bound_values_M,2);
 
+if plot_all
+    figure();
+    histogram(sampled_gradients);
 
+end
+max_l = size(quantiles,2);2
 
 Mask_op = sparse(sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
 Mask_op_comp = sparse(numel(param_struct.Mask)-sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
@@ -438,12 +471,14 @@ l2_mapS = sqrt(sum( abs( param_data.Phi(xmap_S) - param_data.y ).^2 ,'all')) ;
 
 
 for bound_num = 1:max_l
-    
-    param_struct.l2_mean_pix = mean_values_M(bound_num);
-    param_struct.l2_bound_pix = bound_values_M(bound_num);
 
-    param_struct.l2_mean_grad = mean_values_grad(bound_num)  ;
-    param_struct.l2_bound_grad= bound_values_grad(bound_num)  ;
+    param_struct.l2_mean_pix = median(sampled_pixels(:));
+    pix_quantile = quantiles(bound_num);
+    param_struct.l2_bound_pix = max([quantile(sampled_pixels(:),pix_quantile)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),1-pix_quantile)]);
+
+    param_struct.l2_mean_grad = 0.0;
+    grad_quantile = quantiles(bound_num);
+    param_struct.l2_bound_grad= max([quantile(sampled_gradients(:),grad_quantile)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),1-grad_quantile)]);
 
 
     %%
@@ -481,11 +516,11 @@ for bound_num = 1:max_l
     disp(['       rho = ',num2str(rho)])
     disp('*****************************************')
 
-    
-    l2_bound_params       = strjoin([param_struct.l2_mean_grad,grad_norm_name,"mean_grad",param_struct.l2_bound_grad,grad_norm_name,"bound_grad",param_struct.l2_mean_pix,M_norm_name,"mean_pix",param_struct.l2_bound_pix,M_norm_name,"bound_pix",alpha,"alpha"],"_");
+
+    l2_bound_params       = strjoin([param_struct.l2_mean_grad,grad_norm_name,"mean_grad",param_struct.l2_bound_grad,grad_norm_name,"bound_grad",grad_quantile,"grad_quantile",param_struct.l2_mean_pix,M_norm_name,"mean_pix",param_struct.l2_bound_pix,M_norm_name,"bound_pix",pix_quantile,"pix_quantile",alpha,"alpha"],"_");
 %     l2_bound_params_fig   = strjoin([param_struct.l2_mean_grad,grad_norm_name,"mean_grad",param_struct.l2_bound_grad,grad_norm_name,"bound_grad",param_struct.l2_mean_pix,M_norm_name,"mean_pix",param_struct.l2_bound_pix,M_norm_name,"bound_pix",alpha,"alpha"]," ");
-    l2_bound_params_fig   = strjoin([grad_norm_name,"ball on GradM center=",param_struct.l2_mean_grad,"radius=",param_struct.l2_bound_grad,"|",...
-                                     M_norm_name,"ball on M center=",param_struct.l2_mean_pix,"radius=",param_struct.l2_bound_pix,"|"," alpha=",alpha]," ");
+    l2_bound_params_fig   = strjoin([grad_norm_name,"ball on GradM center=",param_struct.l2_mean_grad,"quantile=",grad_quantile,"radius=",param_struct.l2_bound_grad,"|",...
+                                     M_norm_name,"ball on M center=",param_struct.l2_mean_pix,"radius=",param_struct.l2_bound_pix,"quantile=",grad_quantile,"|"," alpha=",alpha]," ");
 %     linf_bound_params = strjoin([param_struct.linf_bound_max,"linfMax",param_struct.linf_bound_min,"linfMin",sigma4,"sigma4"],"_");
 %     linf_bound_params_fig = strjoin([param_struct.linf_bound_max,"linfMax",param_struct.linf_bound_min,"linfMin",sigma4,"sigma4"],"-");
 
@@ -515,7 +550,8 @@ for bound_num = 1:max_l
     subplot 224, imagesc(result.xS), axis image; colormap gray; colorbar, xlabel('xS'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
 
 %     sgtitle(sup_title)
-    sgtitle(strjoin([sup_title,' rho=',rho],''))
+
+    sgtitle(strjoin([sup_title,' rho=',rho,' angles= ',geom.n_angles,' detectors= ',geom.ndetectors],''))
     disp(['saving everything as',strjoin([name,"BUQO_problem_results",l2_bound_params,forward_param_names],'_')]);
 
     saveas(fig,fig_path)
@@ -590,14 +626,12 @@ for bound_num = 1:max_l
         fig_name     = strjoin([name,"BUQO_problem_convergence",l2_bound_params,forward_param_names,"fig"],["_","_","_","."]);
     end
     fig_path = strjoin([target_folder,fig_name],"/");
-    sgtitle(strjoin([sup_title,' rho=',rho],''))
+    sgtitle(strjoin([sup_title,' rho=',rho,' angles=',geom.n_angles,' detectors=',geom.ndetectors],''))
     saveas(fig,fig_path)
 
 
-
 end
+close all
 
-
-
-% mask_dil = imdilate(mask,strel('disk',2));
-% figure();imagesc(mask_dil-mask)
+    % mask_dil = imdilate(mask,strel('disk',2));
+    % figure();imagesc(mask_dil-mask)

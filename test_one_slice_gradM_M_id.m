@@ -29,7 +29,7 @@ if grad_scheme_name ~= ""
     folder_name   = strjoin(["ct1_experiment",grad_norm_name,"gradM",grad_scheme_name,M_norm_name,"M"],'_');
 else
     grad_op_name = "gradient_op";
-    folder_name   = strjoin(["ct1_experiment",grad_norm_name,"gradM",M_norm_name,"M"],'_');
+    folder_name   = strjoin(["ct1_experiment",grad_norm_name,"gradM",M_norm_name,"M","identity"],'_');
 end
 
 if use_full_size
@@ -119,9 +119,9 @@ param_data.Ny = size(im_true,2);
 vol_geom = astra_create_vol_geom(param_data.Nx,param_data.Ny);
 %create a parallel projection geometry with spacing =1 pixel, 384 
 
-geom.ndetectors = 900;
+geom.ndetectors = 1000;
 geom.spacing    = view_size/geom.ndetectors;%1/sqrt(2);% 1/(nx*ny);
-geom.n_angles   = 900;
+geom.n_angles   = 1000;
 geom.angles     = linspace2(0,pi,geom.n_angles);%use more angles
 proj_geom       = astra_create_proj_geom('parallel', geom.spacing, geom.ndetectors, geom.angles);
 geom.proj       = proj_geom;
@@ -135,9 +135,12 @@ W_scaled = W/W.normest;
 
 
 
-phi = @(x) reshape(W_scaled*x(:),W.proj_size);
-
-phit = @(v) reshape(W_scaled'*v(:),size(im_true)); 
+% phi = @(x) reshape(W_scaled*x(:),W.proj_size);
+% 
+% 
+% phit = @(v) reshape(W_scaled'*v(:),size(im_true)); 
+phi  = @(x) x(:);
+phit = @(v) reshape(v,size(im_true)); 
 norm_phi = op_norm(phi, phit, [param_data.Ny, param_data.Nx], 1e-4, 200, 0);  
 Wscaled  = W/W.normest;
 param_data.Phi  =phi;
@@ -176,7 +179,7 @@ disp(['diff = ', num2str(norm(fwd-bwd)/norm(fwd))])
 % -------------------------------------------------
 
 %%
-param_data.sig_noise = 1e-4 ;
+param_data.sig_noise = 5e-4 ;
 param_data.y0 = param_data.Phi(im_true) ;
 rng(seed);
 noise = (randn(param_data.M) ) * param_data.sig_noise/sqrt(2) ; %use gaussian for starters should be poisson as poisson is more accurate
@@ -336,41 +339,26 @@ imagesc((1-texture_mask).*xmap),axis image; colorbar, colormap gray, xlabel('sam
 [fx, fy] = gradient(xmap);
 sampled_gradients = [fx(texture_mask>0),fy(texture_mask>0)];
 
-mean_values_grad  = [0,0,0,0,0];
-% bound_values_grad = [max([quantile(sampled_gradients(:),0.65)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.35)]),...
-%                      max([quantile(sampled_gradients(:),0.6)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.4)]),...
-%                      max([quantile(sampled_gradients(:),0.8)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.2)]),...
-%                      max([quantile(sampled_gradients(:),0.9)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.1)]),...
-%                      max([quantile(sampled_gradients(:),1.0)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.0)])];
-bound_values_grad = [...
-                     max([quantile(sampled_gradients(:),0.6)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.4)]),...
-                     max([quantile(sampled_gradients(:),0.8)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.2)]),...
-                     max([quantile(sampled_gradients(:),0.9)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.1)]),...
-                     max([quantile(sampled_gradients(:),1.0)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.0)]),...
-                     max([quantile(sampled_gradients(:),0.65)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.35)]),
-                     ];
-% bound_values_grad = [0.1,0.1,0.1,0.1];
+mean_values_grad  = [0,0,0,0];
+% bound_values_grad = [max([quantile(sampled_gradients(:),1.0)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.0)]),...
+%                     max([quantile(sampled_gradients(:),0.9)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.1)]),...
+%                     max([quantile(sampled_gradients(:),0.8)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.2)]),...
+%                     max([quantile(sampled_gradients(:),0.6)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.4)])];
+bound_values_grad = [0.001,0.001,0.001,0.001];
 
 sampled_pixels = xmap(texture_mask>0);
 
-mean_values_M  = [median(sampled_pixels(:)),median(sampled_pixels(:)),median(sampled_pixels(:)),median(sampled_pixels(:)),median(sampled_pixels(:))];
-% mean_values_M  = [0.8308,0.8308,0.8308,0.8308];
+mean_values_M  = [median(sampled_pixels(:)),median(sampled_pixels(:)),median(sampled_pixels(:)),median(sampled_pixels(:))];
 % bound_values_M = [0.005,...
 %                   0.005,...
 %                   0.005,...
 %                   0.005];
-bound_values_M = [max([quantile(sampled_pixels(:),1.0)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.0)]),...
-                  max([quantile(sampled_pixels(:),0.9)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.1)]),...
+bound_values_M = [std(sampled_pixels(:)),...
+                  max([quantile(sampled_pixels(:),1.0)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.0)]),...
                   max([quantile(sampled_pixels(:),0.8)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.2)]),...
-                  max([quantile(sampled_pixels(:),0.6)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.4)]),...
-                  max([quantile(sampled_pixels(:),0.65)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.35)])
-                  ]
-% bound_values_M = [0.17773,...
-%                   0.17773,  ...
-%                   0.2,...
-%                   0.3
-%                   ]
-              
+                  max([quantile(sampled_pixels(:),0.6)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.4)])
+                  ];
+
 figure();
 histogram(sampled_gradients);
 max_l = size(bound_values_M,2);
@@ -482,10 +470,10 @@ for bound_num = 1:max_l
     disp('*****************************************')
 
     
-    l2_bound_params       = strjoin([param_struct.l2_mean_grad,grad_norm_name,"mean_grad",param_struct.l2_bound_grad,grad_norm_name,"bound_grad",param_struct.l2_mean_pix,M_norm_name,"mean_pix",param_struct.l2_bound_pix,M_norm_name,"bound_pix",alpha,"alpha"],"_");
-%     l2_bound_params_fig   = strjoin([param_struct.l2_mean_grad,grad_norm_name,"mean_grad",param_struct.l2_bound_grad,grad_norm_name,"bound_grad",param_struct.l2_mean_pix,M_norm_name,"mean_pix",param_struct.l2_bound_pix,M_norm_name,"bound_pix",alpha,"alpha"]," ");
+    l2_bound_params       = strjoin([param_struct.l2_mean_grad,grad_norm_name,"mean_grad",param_struct.l2_bound_grad,grad_norm_name,"bound_grad",param_struct.l2_mean_pix,M_norm_name,"mean_pix",param_struct.l2_bound_pix,M_norm_name,"bound_pix"],"_");
+    l2_bound_params_fig   = strjoin([param_struct.l2_mean_grad,grad_norm_name,"mean_grad",param_struct.l2_bound_grad,grad_norm_name,"bound_grad",param_struct.l2_mean_pix,M_norm_name,"mean_pix",param_struct.l2_bound_pix,M_norm_name,"bound_pix"]," ");
     l2_bound_params_fig   = strjoin([grad_norm_name,"ball on GradM center=",param_struct.l2_mean_grad,"radius=",param_struct.l2_bound_grad,"|",...
-                                     M_norm_name,"ball on M center=",param_struct.l2_mean_pix,"radius=",param_struct.l2_bound_pix,"|"," alpha=",alpha]," ");
+                                     M_norm_name,"ball on M center=",param_struct.l2_mean_pix,"radius=",param_struct.l2_bound_pix]," ");
 %     linf_bound_params = strjoin([param_struct.linf_bound_max,"linfMax",param_struct.linf_bound_min,"linfMin",sigma4,"sigma4"],"_");
 %     linf_bound_params_fig = strjoin([param_struct.linf_bound_max,"linfMax",param_struct.linf_bound_min,"linfMin",sigma4,"sigma4"],"-");
 
@@ -505,17 +493,16 @@ for bound_num = 1:max_l
     png_fig_path = strjoin([target_folder,'png',png_fig_name],"/");
 
 
-    fig =figure;
+    fig =figure, 
     pause(0.00001);
     frame_h = get(handle(gcf),'JavaFrame');
-    set(frame_h,'Maximized',1);
+    set(frame_h,'Maximized',1)
     subplot 221, imagesc(xmap), axis image; colormap gray; colorbar, xlabel('xmap'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
     subplot 222, imagesc(xmap_S), axis image; colormap gray; colorbar, xlabel('xmap - no struct'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
     subplot 223, imagesc(result.xC), axis image; colormap gray; colorbar, xlabel('xC'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
     subplot 224, imagesc(result.xS), axis image; colormap gray; colorbar, xlabel('xS'), ax = gca, ax.YLim = [lower_x upper_x], ax.XLim = [lower_y upper_y];
 
-%     sgtitle(sup_title)
-    sgtitle(strjoin([sup_title,' rho=',rho],''))
+    sgtitle(sup_title)
     disp(['saving everything as',strjoin([name,"BUQO_problem_results",l2_bound_params,forward_param_names],'_')]);
 
     saveas(fig,fig_path)
@@ -568,11 +555,11 @@ for bound_num = 1:max_l
     results_path        = strjoin([target_folder ,results_name],'/');
 
 
-
-
-    save(results_path,'xmap','hpd_constraint','l2_bound_pix','l2_bound_grad','l2_mean_pix','l2_mean_grad','tau','epsilon','struct_mask','phi_imtrue','x_c','x_s','dist2','l2data','l1reg','l2smooth','rho','smooth_max','alpha')
-
     fig =figure, 
+
+    save(results_path,'xmap','hpd_constraint','l2_bound_pix','l2_bound_grad','l2_mean_pix','l2_mean_grad','tau','epsilon','struct_mask','phi_imtrue','x_c','x_s','dist2','l2data','l1reg','l2smooth','rho','smooth_max')
+
+
     subplot(321);plot(l1reg), hold on, plot(hpd_constraint*ones(size(l1reg)),'r'),xlabel('it'), ylabel('l1 norm regulariser hpd-psi xc'), 
     subplot(322);plot(l2data), hold on, plot(epsilon*ones(size(l2data)),'r'), xlabel('it'), ylabel('l2 norm data fit-phi xc')
     subplot(323);plot(l2smooth), hold on, plot(l2_bound_pix*ones(size(l2smooth)),'r'),  xlabel('it'), ylabel(strjoin([M_norm_name,' Mxs']))
@@ -590,7 +577,7 @@ for bound_num = 1:max_l
         fig_name     = strjoin([name,"BUQO_problem_convergence",l2_bound_params,forward_param_names,"fig"],["_","_","_","."]);
     end
     fig_path = strjoin([target_folder,fig_name],"/");
-    sgtitle(strjoin([sup_title,' rho=',rho],''))
+    sgtitle(sup_title)
     saveas(fig,fig_path)
 
 
