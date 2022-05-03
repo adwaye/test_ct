@@ -428,7 +428,7 @@ param_struct.l1bound = param_hpd.HPDconstraint ;
 param_algo.NbIt = 10000 ;
 param_algo.stop_dist = 1e-4 ;
 param_algo.stop_norm2 = 1e-4 ;
-param_algo.stop_norm1 = 1e-4 ;
+param_algo.stop_nor m1 = 1e-4 ;
 param_algo.stop_err_smooth = 1e-4 ;
 
 
