@@ -1,6 +1,6 @@
 % Test UQ for MRI
 % discrete Fourier measurements + wavelet
-%% ------------------------------------------------------------------------
+%% Setting up file and folder names
 
 clear all
 clc
@@ -24,7 +24,7 @@ BUQO_algo = str2func(algo_name);
 use_full_size = false;
 
 
-source_folder = "Data/ct_scans/ct1";
+source_folder = "Data/ct_scans/ct1";%location of the ct_scans
 if grad_scheme_name ~= ""
     grad_op_name = strjoin(["gradient_op",grad_scheme_name],"_");
     folder_name   = strjoin(["ct1_experiment",grad_norm_name,"gradM",grad_scheme_name,M_norm_name,"M"],'_');
@@ -39,10 +39,11 @@ end
 if use_dil_mask
     folder_name = strjoin([folder_name,"dil_mask"],'_');
 end
+%folder_name is where the results of the experiments are saved
 grad_op   = str2func(grad_op_name);
 BUQO_algo = str2func(algo_name);
 
-%% 
+
 
 
 target_folder = strjoin(["/home/adwaye/matlab_projects/test_CT/Figures",folder_name],'/');
@@ -65,7 +66,7 @@ name     = fname;
 
 
 
-
+%% loading the matfile containing the image and the labels of the pe/artefact
 matfile = load(filename);
 im_true = double(matfile.CT);
 normA   = im_true-min(im_true(:));
@@ -111,7 +112,7 @@ end
 seed = 0 ;
 SNR =@(x) 20 * log10(norm(im_true(:))/norm(im_true(:)-x(:)));
 
-%%
+%% setting the different paramters for each run of the experiment
 % im_true = zeros(350,350);
 [param_data.Ny,param_data.Nx] = size(im_true) ;
 param_data.N = numel(im_true) ;
@@ -129,6 +130,7 @@ n_noise = max(size(noise_array));
 for noise_index=1:n_noise
     for alpha_index = 1:n_alpha
         for index_setup = 1:n_setup
+            %% creating  the forward operator
             geom.n_angles   = angle_setup(index_setup);%900;
             geom.ndetectors = detector_setup(index_setup);%900;
 
@@ -163,7 +165,7 @@ for noise_index=1:n_noise
             param_data.normPhi = Wscaled.normest;%op_norm(param_data.Phi, param_data.Phit, [param_data.Ny, param_data.Nx], 1e-4, 200, 0);    
             param_data.M       = size(param_data.Phi(im_true)) ;
 
-
+            %% testing the forward operator
             one_sinogram  = ones(size(phi(im_true)));
             geom_shape    = phit(one_sinogram);
 
@@ -192,7 +194,7 @@ for noise_index=1:n_noise
             disp(['diff = ', num2str(norm(fwd-bwd)/norm(fwd))])
             % -------------------------------------------------
 
-            %%
+            %% creating the data for the forward problem simulation
             param_data.sig_noise = noise_array(noise_index) ;
             param_data.y0 = param_data.Phi(im_true) ;
             rng(seed);
@@ -210,7 +212,7 @@ for noise_index=1:n_noise
                 subplot 133, imagesc(im_fbp), axis image, colormap gray, colorbar, xlabel(['FBP - SNR ', num2str(SNR(im_fbp))])
             end
 
-            %%
+            %% creating the regulariser for the forward problem
 
             [param_map.Psi, param_map.Psit] = wavelet_op(rand(size(im_true)), 4) ;
             param_map.normPsi =1 ;
@@ -229,7 +231,7 @@ for noise_index=1:n_noise
 
 
 
-
+            %% running the forward problem
             forward_param_names       = strjoin([param_data.sig_noise,"noise",geom.ndetectors,"ndtct",geom.n_angles,"agls",geom.spacing,"grdsz"],"_");
             results_name        = strjoin([name,"forward_problem_results",forward_param_names,"mat"],["_","_","."]);
             results_path        = strjoin([target_folder ,results_name],'/');
@@ -256,7 +258,8 @@ for noise_index=1:n_noise
 
 
 
-            %%
+            %% settting up the parameters for the BUQO problem
+            
 
             param_hpd.lambda_t = param_data.N / sum(abs(param_map.Psit(xmap))) ;
 
@@ -308,32 +311,23 @@ for noise_index=1:n_noise
 
 
             param_struct.Mask       = mask_struct; % Mask to select structure to test
-            param_struct.choice_set = 'l2_const' ;
-            param_struct.Size_Gauss_kern = [3,7,11] ;
-            disp('create inpainting operator...')
-            disp('     -- recursive - can take few minutes... --')
-            param_struct.L = create_inpainting_operator_test(param_struct.Mask, param_struct.Size_Gauss_kern, xmap) ;
-            disp('...done')
-            param_struct.L = sparse(param_struct.L) ;
+%             param_struct.choice_set = 'l2_const' ;
+%             param_struct.Size_Gauss_kern = [3,7,11] ;
+%             disp('create inpainting operator...')
+%             disp('     -- recursive - can take few minutes... --')
+%             param_struct.L = create_inpainting_operator_test(param_struct.Mask, param_struct.Size_Gauss_kern, xmap) ;
+%             disp('...done')
+%             param_struct.L = sparse(param_struct.L) ;
+% 
+%             param_struct.Lbar = sparse([-speye(sum(param_struct.Mask(:))), param_struct.L]) ;
+%             param_struct.Nout = sum(param_struct.Mask(:)==0) ;
+%             param_struct.normL = op_norm(@(x) param_struct.L*x, @(x) param_struct.L'*x, [param_struct.Nout,1], 1e-4, 200, 0);  
+%             param_struct.normLbar = op_norm(@(x) param_struct.Lbar*x, @(x) param_struct.Lbar'*x, [numel(param_struct.Mask),1], 1e-4, 200, 0);  
+% 
+%             param_struct.Li =@(u) [param_struct.L*u ; u] ;
+%             param_struct.Lit =@(x) param_struct.L'*x(param_struct.Mask>0) + x(param_struct.Mask==0) ;
+%             param_struct.normLi = op_norm(param_struct.Lit, param_struct.Li, [numel(param_struct.Mask),1], 1e-4, 200, 0);  
 
-            param_struct.Lbar = sparse([-speye(sum(param_struct.Mask(:))), param_struct.L]) ;
-            param_struct.Nout = sum(param_struct.Mask(:)==0) ;
-            param_struct.normL = op_norm(@(x) param_struct.L*x, @(x) param_struct.L'*x, [param_struct.Nout,1], 1e-4, 200, 0);  
-            param_struct.normLbar = op_norm(@(x) param_struct.Lbar*x, @(x) param_struct.Lbar'*x, [numel(param_struct.Mask),1], 1e-4, 200, 0);  
-
-            param_struct.Li =@(u) [param_struct.L*u ; u] ;
-            param_struct.Lit =@(x) param_struct.L'*x(param_struct.Mask>0) + x(param_struct.Mask==0) ;
-            param_struct.normLi = op_norm(param_struct.Lit, param_struct.Li, [numel(param_struct.Mask),1], 1e-4, 200, 0);  
-
-            xmap_S = xmap ;
-            xmap_S(param_struct.Mask>0) = param_struct.L*xmap(param_struct.Mask==0) ;
-            if plot_all
-                fig=figure, 
-                subplot 221, imagesc(tmp), axis image; colorbar, colormap gray, xlabel('map without struct')
-                subplot 222, imagesc(xmap_S), axis image ; colorbar, colormap gray, xlabel('smoothed struct')
-                subplot 223, imagesc(im_true), axis image; colorbar, colormap gray, xlabel('true')
-                subplot 224, imagesc(xmap), axis image; colorbar, colormap gray, xlabel('map')
-            end
             %param_struct.l2_mean = 0 ;
             if strcmp(tempname,'curated2_pe_zslice_189.mat')
                 texture_mask                  = zeros(size(xmap));
@@ -361,47 +355,14 @@ for noise_index=1:n_noise
 
             mean_values_grad  = [0,0,0,0,0];
             quantiles    = [0.6,0.7,0.9];
-            % bound_values_grad = [max([quantile(sampled_gradients(:),0.65)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.35)]),...
-            %                      max([quantile(sampled_gradients(:),0.6)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.4)]),...
-            %                      max([quantile(sampled_gradients(:),0.8)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.2)]),...
-            %                      max([quantile(sampled_gradients(:),0.9)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.1)]),...
-            %                      max([quantile(sampled_gradients(:),1.0)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.0)])];
-            % bound_values_grad = [...
-            %                      max([quantile(sampled_gradients(:),0.6)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.4)]),...
-            %                      max([quantile(sampled_gradients(:),0.8)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.2)]),...
-            %                      max([quantile(sampled_gradients(:),0.9)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.1)]),...
-            %                      max([quantile(sampled_gradients(:),1.0)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.0)]),...
-            %                      max([quantile(sampled_gradients(:),0.65)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),0.35)]),
-            %                      ];
-            % bound_values_grad = [0.1,0.1,0.1,0.1];
 
             sampled_pixels = xmap(texture_mask>0);
-
             mean_values_M  = [median(sampled_pixels(:)),median(sampled_pixels(:)),median(sampled_pixels(:)),median(sampled_pixels(:)),median(sampled_pixels(:))];
-            % mean_values_M  = [0.8308,0.8308,0.8308,0.8308];
-            % bound_values_M = [0.005,...
-            %                   0.005,...
-            %                   0.005,...
-            %                   0.005];
-            % bound_values_M = [max([quantile(sampled_pixels(:),1.0)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.0)]),...
-            %                   max([quantile(sampled_pixels(:),0.9)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.1)]),...
-            %                   max([quantile(sampled_pixels(:),0.8)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.2)]),...
-            %                   max([quantile(sampled_pixels(:),0.6)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.4)]),...
-            %                   max([quantile(sampled_pixels(:),0.65)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),0.35)])
-            %                   ]
-            % bound_values_M = [0.17773,...
-            %                   0.17773,  ...
-            %                   0.2,...
-            %                   0.3
-            %                   ]
-
-            if plot_all
-                figure();
-                histogram(sampled_gradients);
-
-            end
             max_l = size(quantiles,2);
-
+            
+            
+            
+            %% creating the operators that characterise the set S
             Mask_op = sparse(sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
             Mask_op_comp = sparse(numel(param_struct.Mask)-sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
             i = 1; ic = 1;
@@ -436,7 +397,7 @@ for noise_index=1:n_noise
 
             param_struct.Gradop = Gradop ;
             param_struct.Gradopt = Gradopt;
-            param_struct.Mbarop = Mask_op - param_struct.L*Mask_op_comp;
+%             param_struct.Mbarop = Mask_op - param_struct.L*Mask_op_comp;
             param_struct.Mask_op = Mask_op;
 
             param_struct.l2b_Mask = sqrt(sum(param_struct.Mask(:)) + 2* sqrt(sum(param_struct.Mask(:)))) *  param_data.sig_noise ;
@@ -458,23 +419,37 @@ for noise_index=1:n_noise
 
 
 
-            l1_mapS = sum(abs(param_map.Psit(xmap_S))) ;
-            l2_mapS = sqrt(sum( abs( param_data.Phi(xmap_S) - param_data.y ).^2 ,'all')) ;
 
 
             for bound_num = 1:max_l
+                %% one iteration of the BUQO problem solver for the current map estimate
 
-                param_struct.l2_mean_pix = median(sampled_pixels(:));
+                param_struct.l2_mean_pix = median(sampled_pixels(:));%center of the ball for M
                 pix_quantile = quantiles(bound_num);
-                param_struct.l2_bound_pix = max([quantile(sampled_pixels(:),pix_quantile)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),1-pix_quantile)]);
+                param_struct.l2_bound_pix = max([quantile(sampled_pixels(:),pix_quantile)-median(sampled_pixels(:)),median(sampled_pixels(:))-quantile(sampled_pixels(:),1-pix_quantile)]);%radius of the ball for M
 
-                param_struct.l2_mean_grad = 0.0;
+                param_struct.l2_mean_grad = 0.0;%center of the ball for the gradient
                 grad_quantile = quantiles(bound_num);
-                param_struct.l2_bound_grad= max([quantile(sampled_gradients(:),grad_quantile)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),1-grad_quantile)]);
+                param_struct.l2_bound_grad= max([quantile(sampled_gradients(:),grad_quantile)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),1-grad_quantile)]);%radius of the ball for the gradient
 
 
-                %%
+                %% finding xmap_S, an element of S that is closest to xmap
+                disp("**************************************************************")
+                disp("Finding projection of xmap in S xmap_S")
+                proj_S = Project_to_S(xmap, param_algo, param_data,  param_struct);
+                xmap_S = proj_S.xS ;
+                l1_mapS = sum(abs(param_map.Psit(xmap_S))) ;
+                l2_mapS = sqrt(sum( abs( param_data.Phi(xmap_S) - param_data.y ).^2 ,'all')) ;
 
+%             xmap_S(param_struct.Mask>0) = param_struct.L*xmap(param_struct.Mask==0) ;
+                if plot_all
+                    fig=figure, 
+                    subplot 221, imagesc(tmp), axis image; colorbar, colormap gray, xlabel('map without struct')
+                    subplot 222, imagesc(xmap_S), axis image ; colorbar, colormap gray, xlabel('smoothed struct')
+                    subplot 223, imagesc(im_true), axis image; colorbar, colormap gray, xlabel('true')
+                    subplot 224, imagesc(xmap), axis image; colorbar, colormap gray, xlabel('map')
+                end
+                %% finding xC and xS
                 disp(' ')
                 disp(' ')
                 disp(' ')
@@ -486,6 +461,7 @@ for noise_index=1:n_noise
                 disp(['HPD bound = ',num2str(param_hpd.HPDconstraint)])
                 disp(['l2 data inpaint = ',num2str(l2_mapS)])
                 disp(['data bound = ',num2str(param_data.data_eps)])
+                
 
                 if l1_mapS <= param_hpd.HPDconstraint && l2_mapS <= param_data.data_eps
                     disp('Intersection between S and Calpha nonempty')
@@ -508,14 +484,12 @@ for noise_index=1:n_noise
                 disp(['       rho = ',num2str(rho)])
                 disp('*****************************************')
 
-
+                %names for the figures and .mat files containing the BUQO
+                %result
                 l2_bound_params       = strjoin([param_struct.l2_mean_grad,grad_norm_name,"mean_grad",param_struct.l2_bound_grad,grad_norm_name,"bound_grad",grad_quantile,"grad_quantile",param_struct.l2_mean_pix,M_norm_name,"mean_pix",param_struct.l2_bound_pix,M_norm_name,"bound_pix",pix_quantile,"pix_quantile",alpha,"alpha"],"_");
-            %     l2_bound_params_fig   = strjoin([param_struct.l2_mean_grad,grad_norm_name,"mean_grad",param_struct.l2_bound_grad,grad_norm_name,"bound_grad",param_struct.l2_mean_pix,M_norm_name,"mean_pix",param_struct.l2_bound_pix,M_norm_name,"bound_pix",alpha,"alpha"]," ");
                 l2_bound_params_fig   = strjoin([grad_norm_name,"ball on GradM center=",param_struct.l2_mean_grad,"quantile=",grad_quantile,"radius=",param_struct.l2_bound_grad,"|",...
                                                  M_norm_name,"ball on M center=",param_struct.l2_mean_pix,"radius=",param_struct.l2_bound_pix,"quantile=",grad_quantile,"|"," alpha=",alpha]," ");
-            %     linf_bound_params = strjoin([param_struct.linf_bound_max,"linfMax",param_struct.linf_bound_min,"linfMin",sigma4,"sigma4"],"_");
-            %     linf_bound_params_fig = strjoin([param_struct.linf_bound_max,"linfMax",param_struct.linf_bound_min,"linfMin",sigma4,"sigma4"],"-");
-
+                % this is in case the norms used are different
                 if grad_norm_name == "Linf"
                     fig_name     = strjoin([name,"BUQO_problem_results",linf_bound_params,forward_param_names,"fig"],["_","_","_","."]);
                     png_fig_name = strjoin([name,"BUQO_problem_results",linf_bound_params,forward_param_names,"png"],["_","_","_","."]);
@@ -527,11 +501,11 @@ for noise_index=1:n_noise
             %         sup_title    = strjoin([inpainting_ext,l2_bound_params_fig],"-");
                     sup_title    = l2_bound_params_fig;
                 end
-
+                %% saving the result of BUQO
                 fig_path     = strjoin([target_folder,fig_name],"/");
                 png_fig_path = strjoin([target_folder,'png',png_fig_name],"/");
 
-
+                % figure that conatins xc, xs, xmap, xmap_S
                 fig =figure;
                 pause(0.00001);
                 frame_h = get(handle(gcf),'JavaFrame');
@@ -627,6 +601,3 @@ for noise_index=1:n_noise
         end
     end
 end
-
-    % mask_dil = imdilate(mask,strel('disk',2));
-    % figure();imagesc(mask_dil-mask)
