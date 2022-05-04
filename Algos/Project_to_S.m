@@ -21,8 +21,14 @@ Mask_opt =@(v) reshape(param_struct.Mask_op'*v, param_data.Ny, param_data.Nx) ;
 % sigma4 = 1 / sqrt( normGrad ) ;
 % disp("estimating sigma4 as reciprocal of sqrt of ||M||");
 % end
-% disp(['sigma4= ',num2str(sigma4)]);               
-tau = 0.9 * 2*sqrt(2);
+% disp(['sigma4= ',num2str(sigma4)]);   
+normMask = op_norm(Mask_op, Mask_opt, [param_data.Ny, param_data.Nx], 1e-4, 200, 0) ;
+sigma1 = 1 / sqrt( normMask ) ;
+normGrad = op_norm(Gradop, Gradopt, [param_data.Ny, param_data.Nx], 1e-4, 200, 0) ;
+sigma2 = 1 / sqrt( normGrad ) ;
+% tau = 0.9 * 2*sqrt(2);
+tau = 0.9 / (1 + sigma1 * normMask ...
+               + sigma2 * normGrad) ;
 
 %% INITIALISATION
 xS = 0 * xmap ;
@@ -66,18 +72,18 @@ for it = 1:param_algo.NbIt
     vold = v ;
     
     %condition on Mbar
-    
-    xS = xmap - 0.5*tau*(Mask_opt(u)*Gradopt(v));
+%     xS = xS - tau*(xmap-xS +Mask_opt(u)+ Gradopt(v));
+    xS = xmap - 0.5*tau*(Mask_opt(u)+ Gradopt(v));
     xS = max(xS,0) ;
 %     xS(xS<0) = 0 ;
     
-    u_ = u  - tau*MxS;
-    u  = u_ - tau * proj_l2ball( tau^(-1) * u_, param_struct.l2_bound_pix, param_struct.l2_mean_pix ) ;
+    u_ = u  + sigma1*MxS;
+    u  = u_ - sigma1 * proj_l2ball( sigma1^(-1) * u_, param_struct.l2_bound_pix, param_struct.l2_mean_pix ) ;
     
     
     %condition on grad
-    v_ = v  - tau * MGradxS;
-    v  = v_ - tau * proj_l2ball( tau^(-1) * v_, param_struct.l2_bound_grad, param_struct.l2_mean_grad ) ;
+    v_ = v  + sigma2 * MGradxS;
+    v  = v_ - sigma2 * proj_l2ball( sigma2^(-1) * v_, param_struct.l2_bound_grad, param_struct.l2_mean_grad ) ;
     
     %making xS
 

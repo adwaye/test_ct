@@ -42,7 +42,7 @@ end
 grad_op   = str2func(grad_op_name);
 BUQO_algo = str2func(algo_name);
 
-%% 
+
 
 
 target_folder = strjoin(["/home/adwaye/matlab_projects/test_CT/Figures",folder_name],'/');
@@ -111,7 +111,7 @@ end
 seed = 0 ;
 SNR =@(x) 20 * log10(norm(im_true(:))/norm(im_true(:)-x(:)));
 
-%%
+%% creating forward OPerator
 % im_true = zeros(350,350);
 [param_data.Ny,param_data.Nx] = size(im_true) ;
 param_data.N = numel(im_true) ;
@@ -128,7 +128,7 @@ n_alpha = max(size(alpha_array));
 n_noise = max(size(noise_array));
 noise_index = 1;
 alpha_index = 1;
-index_setup = 1;
+index_setup = 4;
 
 geom.n_angles   = angle_setup(index_setup);%900;
 geom.ndetectors = detector_setup(index_setup);%900;
@@ -152,7 +152,7 @@ param_data.Phit = phit;
 
 param_data.normPhi = Wscaled.normest;%op_norm(param_data.Phi, param_data.Phit, [param_data.Ny, param_data.Nx], 1e-4, 200, 0);    
 param_data.M       = size(param_data.Phi(im_true)) ;
-
+%% testing forward OPerator
 
 one_sinogram  = ones(size(phi(im_true)));
 geom_shape    = phit(one_sinogram);
@@ -180,9 +180,11 @@ disp('test adjoint operator')
 disp(['fwd = ', num2str(fwd)])
 disp(['bwd = ', num2str(bwd)])
 disp(['diff = ', num2str(norm(fwd-bwd)/norm(fwd))])
+
+
 % -------------------------------------------------
 
-%%
+%%  setting parameters for forward problem simulations
 param_data.sig_noise = noise_array(noise_index) ;
 param_data.y0 = param_data.Phi(im_true) ;
 rng(seed);
@@ -191,7 +193,6 @@ param_data.y = param_data.y0 + noise ;
 
 param_data.data_eps = sqrt(2*prod(param_data.M) + 2* sqrt(4*prod(param_data.M))) *  param_data.sig_noise ;
 
-% FBP estimate
 im_fbp = param_data.Phit(param_data.y) ;
 if plot_all
     figure, 
@@ -199,8 +200,7 @@ if plot_all
 %subplot 132, imagesc(param_data.Mask), axis image, colormap gray, colorbar
     subplot 133, imagesc(im_fbp), axis image, colormap gray, colorbar, xlabel(['FBP - SNR ', num2str(SNR(im_fbp))])
 end
-
-%%
+%% creating regulariser
 
 [param_map.Psi, param_map.Psit] = wavelet_op(rand(size(im_true)), 4) ;
 param_map.normPsi =1 ;
@@ -217,6 +217,8 @@ max_it = 20000 ;
 stop_it = 1e-4 ;
 stop_norm = 1e-4 ;
 
+
+%% Running forward problem simulation
 
 
 
@@ -246,7 +248,7 @@ end
 
 
 
-%%
+%% saving xmap figure
 mask_struct = mask;
 [row_mask col_mask] = find(mask);
 max_y = max(col_mask,[],'all');
@@ -273,11 +275,7 @@ close(fig)
 %imwrite(im_true,'figures/g_truth')
 
 
-
-%===========================================================================
-% RUNNING BUQO NOW
-%===========================================================================
-
+%% setting bounds for the set S definition
 
 param_struct.Mask       = mask_struct; % Mask to select structure to test
 param_struct.choice_set = 'l2_const' ;
@@ -322,7 +320,7 @@ param_struct.l2_mean_grad = 0.0;
 grad_quantile = quantiles(bound_num);
 param_struct.l2_bound_grad= max([quantile(sampled_gradients(:),grad_quantile)-median(sampled_gradients(:)),median(sampled_gradients(:))-quantile(sampled_gradients(:),1-grad_quantile)]);
 
-
+%% Creating operators for the projection onto S
 [Gradop, Gradopt] = grad_op(rand(size(im_true)),mask) ;
 
 Mask_op = sparse(sum(param_struct.Mask(:)), numel(param_struct.Mask)) ;
@@ -343,7 +341,7 @@ param_struct.Gradop = Gradop ;
 param_struct.Gradopt = Gradopt;
 param_struct.Mask_op = Mask_op;
 
-param_algo.NbIt = 10000 ;
+param_algo.NbIt = 30000 ;
 param_algo.stop_dist = 1e-4 ;
 param_algo.stop_norm2 = 1e-4 ;
 param_algo.stop_norm1 = 1e-4 ;
@@ -351,13 +349,6 @@ param_algo.stop_err_smooth = 1e-4 ;
 
 
 proj_S = Project_to_S(xmap, param_algo, param_data,  param_struct);
-
-
-
-
-
-
-
 
 
 
