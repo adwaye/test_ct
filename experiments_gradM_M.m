@@ -526,7 +526,7 @@ for noise_index=1:n_noise
                 saveas(fig,png_fig_path)
 
 
-                L = param_struct.L;
+%                 L = param_struct.L;
                 Mask = param_struct.Mask;
 
 
@@ -572,7 +572,7 @@ for noise_index=1:n_noise
 
 
 
-                save(results_path,'xmap','hpd_constraint','l2_bound_pix','l2_bound_grad','l2_mean_pix','l2_mean_grad','tau','epsilon','struct_mask','phi_imtrue','x_c','x_s','dist2','l2data','l1reg','l2smooth','rho','smooth_max','alpha')
+                save(results_path,'xmap','hpd_constraint','l2_bound_pix','l2_bound_grad','l2_mean_pix','l2_mean_grad','tau','epsilon','struct_mask','phi_imtrue','x_c','x_s','xmap_S','dist2','l2data','l1reg','l2smooth','rho','smooth_max','alpha')
 
                 fig =figure, 
                 subplot(321);plot(l1reg), hold on, plot(hpd_constraint*ones(size(l1reg)),'r'),xlabel('it'), ylabel('l1 norm regulariser hpd-psi xc'), 
