@@ -1,10 +1,10 @@
 
 
-
-folder_name = "/home/amr62/matlab_projects/test_CT/Figures/check_xmaps";
+save_ = false;
+folder_name = "~/matlab_projects/test_CT/Figures/check_xmaps";
 
 ct_loc = "./Data/ct_scans/ct1";
-slice_name = "curated2_pe_yslice_266";%"curated2_pe_yslice_266.mat", "curated2_pe_xslice_225
+slice_name = "curated2_pe_xslice_225";%"curated2_pe_yslice_266.mat", "curated2_pe_xslice_225
 ct_mat = load(strjoin([ct_loc,slice_name,'mat'],["/","."]));
 
 
@@ -39,8 +39,8 @@ noise_array    = [0.00005,0.0002,0.0003,0.001];
 alpha_array  = [0.01];
 
 noise      = noise_array(3);
-ndetectors = detector_setup(2);
-n_angles   = angle_setup(3);
+ndetectors = detector_setup(3);
+n_angles   = angle_setup(4);
 spacing    = view_size/ndetectors;
 
 
@@ -62,5 +62,9 @@ subplot(121),imagesc(im_true), axis image, colormap gray, colorbar, title("Groun
 subplot(122),imagesc(matfile.xmap), axis image, colormap gray, colorbar, title("Simluated reconstruction")
 
 
-
-
+if save_
+    target_folder = strjoin(["~/matlab_projects/test_CT/Figures/for_jonathan",results_name],'/');
+    mkdir(target_folder)
+    imwrite(matfile.xmap,strjoin([target_folder,"simulation.png"],"/"))
+    imwrite(im_true,strjoin([target_folder,"ground_truth.png"],"/"))
+end

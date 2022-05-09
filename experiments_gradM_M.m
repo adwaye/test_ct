@@ -15,7 +15,7 @@ addpath(genpath('Tools'))
 grad_norm_name = "L2"; %choose from L1, L2, Linf
 M_norm_name    = "L2"; %choose from L1, L2, Linf
 inpainting = false;%
-use_dil_mask= false;
+use_dil_mask= true;
 plot_all = false;
 
 grad_scheme_name = "";%bw_fw or ""
@@ -55,8 +55,8 @@ filenames = dir(query);
 nfiles    = size(filenames,1);
 
 % tempname = "curated2_pe_zslice_189.mat";%$change this to process a different slice
-% tempname = "curated2_pe_xslice_225.mat";
-tempname = "curated2_pe_yslice_266.mat";
+tempname = "curated2_pe_xslice_225.mat";
+% tempname = "curated2_pe_yslice_266.mat";
 [filepath,fname,ext] = fileparts(tempname);
 
 
@@ -535,10 +535,10 @@ for noise_index=1:n_noise
                 hpd_constraint = param_hpd.HPDconstraint;
                 epsilon        = param_data.data_eps;
             %     theta          = param_struct.l2_bound;
-                l2_bound_pix   = param_struct.l2_bound_pix
-                l2_mean_pix    = param_struct.l2_mean_pix
-                l2_mean_grad   = param_struct.l2_mean_grad
-                l2_bound_grad  = param_struct.l2_bound_grad
+                l2_bound_pix   = param_struct.l2_bound_pix;
+                l2_mean_pix    = param_struct.l2_mean_pix;
+                l2_mean_grad   = param_struct.l2_mean_grad;
+                l2_bound_grad  = param_struct.l2_bound_grad;
             %     tau            = param_struct.tol_smooth;
 
                 phi_imtrue     = param_data.Phi(im_true);
@@ -595,9 +595,9 @@ for noise_index=1:n_noise
                 sgtitle(strjoin([sup_title,' rho=',rho,' angles=',geom.n_angles,' detectors=',geom.ndetectors],''))
                 saveas(fig,fig_path)
 
-
+                close all
             end
-        close all
+        
         end
     end
 end
