@@ -14,11 +14,11 @@ addpath(genpath('Tools'))
 
 grad_norm_name = "L2"; %choose from L1, L2, Linf
 M_norm_name    = "L2"; %choose from L1, L2, Linf
-inpainting = false;%
-use_dil_mask= true;
-plot_all = false;
 
-grad_scheme_name = "";%bw_fw or ""
+use_dil_mask= false; %this dilates the mask for one particular slice whose stored mask is too small
+plot_all = false;% choose true if you want to plot things like fbp, view window for ct setup etc
+
+grad_scheme_name = "";
 algo_name = strjoin(["POCS",grad_norm_name,"gradM",M_norm_name,"Mx"],'_');
 BUQO_algo = str2func(algo_name);
 use_full_size = false;
@@ -55,8 +55,12 @@ filenames = dir(query);
 nfiles    = size(filenames,1);
 
 % tempname = "curated2_pe_zslice_189.mat";%$change this to process a different slice
-tempname = "curated2_pe_xslice_225.mat";
-% tempname = "curated2_pe_yslice_266.mat";
+%tempname = "curated2_pe_xslice_225.mat";
+tempname = "curated2_pe_yslice_266.mat";
+
+if strmatch(tempname,"curated2_pe_xslice_225.mat")
+   use_dil_mask = true;
+end
 [filepath,fname,ext] = fileparts(tempname);
 
 
@@ -120,9 +124,9 @@ param_data.Nx = size(im_true,1);
 param_data.Ny = size(im_true,2);
 
 
-detector_setup = [450,450,450,450];
-angle_setup    = [450,300,200,100];
-noise_array    = [0.00005,0.0002,0.0003,0.001];
+detector_setup = [450,450,450,450,450];
+angle_setup    = [50];
+noise_array    = [0.075,0.05,0.01,0.005];
 alpha_array  = [0.01];
 n_setup = size(angle_setup,2);
 n_alpha = max(size(alpha_array));
@@ -132,7 +136,7 @@ for noise_index=1:n_noise
         for index_setup = 1:n_setup
             %% creating  the forward operator
             geom.n_angles   = angle_setup(index_setup);%900;
-            geom.ndetectors = detector_setup(index_setup);%900;
+            geom.ndetectors = 450;%detector_setup(index_setup);%900;
 
             vol_geom = astra_create_vol_geom(param_data.Nx,param_data.Ny);
             %create a parallel projection geometry with spacing =1 pixel, 384 
@@ -198,10 +202,11 @@ for noise_index=1:n_noise
             param_data.sig_noise = noise_array(noise_index) ;
             param_data.y0 = param_data.Phi(im_true) ;
             rng(seed);
-            noise = (randn(param_data.M) ) * param_data.sig_noise/sqrt(2) ; %use gaussian for starters should be poisson as poisson is more accurate
+            
+            noise = ((randn(param_data.M) ) * param_data.sig_noise/(sqrt(2) * W.normest)) ; %use gaussian for starters should be poisson as poisson is more accurate
             param_data.y = param_data.y0 + noise ;
 
-            param_data.data_eps = sqrt(2*prod(param_data.M) + 2* sqrt(4*prod(param_data.M))) *  param_data.sig_noise ;
+            param_data.data_eps = sqrt(2*prod(param_data.M) + 2* sqrt(4*prod(param_data.M))) *  (param_data.sig_noise/W.normest);
 
             % FBP estimate
             im_fbp = param_data.Phit(param_data.y) ;
@@ -601,3 +606,6 @@ for noise_index=1:n_noise
         end
     end
 end
+disp("=================END============================")
+disp("results can be found at:")
+disp(results_path)
